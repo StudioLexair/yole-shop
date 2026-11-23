@@ -110,6 +110,7 @@ vi.mock('./lib/catalog', async () => {
 describe('Yole Shop App', () => {
   beforeEach(() => {
     localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
   });
 
   it('carga productos, cambia moneda y completa flujo de talla y carrito', async () => {
@@ -198,5 +199,44 @@ describe('Yole Shop App', () => {
 
     // Al cerrar, aparece la franja Vistos recientemente
     expect(screen.getByLabelText('Vistos recientemente')).toBeInTheDocument();
+  });
+
+  it('filtra por presupuesto, cambia a modo oscuro y abre visor fullscreen lightbox', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
+    });
+
+    // Presupuesto $15 - $30 USD muestra Cartera Dior ($18) y oculta New Balance ($35.71) y Sudadera ($38)
+    fireEvent.click(screen.getByRole('button', { name: '$15 – $30 USD' }));
+    expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
+    expect(screen.queryByText('New Balance 9060 Blanco & Rosa')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sudadera Hoodie Café Osito Bordado')).not.toBeInTheDocument();
+
+    // Limpiar filtros vuelve a mostrar todo
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
+    expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+
+    // Modo oscuro desde BottomMenuSheet aplica data-theme="dark" en <html>
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
+    const sheet = screen.getByRole('dialog', { name: 'Menú principal' });
+    fireEvent.click(
+      within(sheet).getByRole('button', { name: 'Cambiar entre modo claro y oscuro' })
+    );
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(within(sheet).getByText('Modo Oscuro elegante')).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Cerrar menú' }));
+
+    // Abrir modal y abrir visor lightbox pantalla completa
+    fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
+    const modal = screen.getByRole('dialog');
+    fireEvent.click(
+      within(modal).getByRole('button', { name: 'Ampliar foto en pantalla completa' })
+    );
+    const lightbox = screen.getByRole('dialog', { name: /Foto ampliada/i });
+    expect(lightbox).toBeInTheDocument();
+    fireEvent.click(within(lightbox).getByRole('button', { name: 'Cerrar vista ampliada' }));
+    expect(screen.queryByRole('dialog', { name: /Foto ampliada/i })).not.toBeInTheDocument();
   });
 });

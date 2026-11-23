@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Eye, Heart, Images, MessageCircle, ShoppingBag } from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
 import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
@@ -29,13 +30,48 @@ export function ProductCard({
   const waUrl = buildWhatsAppProductLink(product, defaultSize, settings);
   const allSizesOut = product.sizes.length > 0 && availableSizes.length === 0;
   const isSoldOut = product.status === 'sold_out' || allSizesOut;
+
+  const altPhoto = product.extra_images?.[0] || '';
   const totalPhotos = 1 + (product.extra_images?.length || 0);
+  const [showAltOnTouch, setShowAltOnTouch] = useState(false);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipedRef = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!altPhoto) return;
+    const t = e.touches[0];
+    if (t) {
+      swipeStartRef.current = { x: t.clientX, y: t.clientY };
+      swipedRef.current = false;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!altPhoto || !swipeStartRef.current) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - swipeStartRef.current.x;
+    const dy = t.clientY - swipeStartRef.current.y;
+    swipeStartRef.current = null;
+    if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy)) {
+      swipedRef.current = true;
+      setShowAltOnTouch((prev) => !prev);
+      setTimeout(() => {
+        swipedRef.current = false;
+      }, 150);
+    }
+  };
 
   return (
-    <article className={`p-card${isSoldOut ? ' is-sold-out' : ''}`}>
+    <article className={`p-card${isSoldOut ? ' is-sold-out' : ''}${showAltOnTouch ? ' is-alt-active' : ''}`}>
       <div
         className="p-card__media"
-        onClick={() => onSelect(product)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onClick={() => {
+          if (swipedRef.current) return;
+          onSelect(product);
+        }}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -47,7 +83,17 @@ export function ProductCard({
           alt={product.title}
           loading="lazy"
           decoding="async"
+          className="p-card__img-main"
         />
+        {altPhoto && (
+          <img
+            src={altPhoto}
+            alt={`${product.title} vista alternativa`}
+            loading="lazy"
+            decoding="async"
+            className="p-card__img-alt"
+          />
+        )}
         <div className="p-card__badges">
           {product.quality && (
             <span className={`p-badge p-badge--qual${product.quality === 'G5' ? ' is-g5' : ''}`}>

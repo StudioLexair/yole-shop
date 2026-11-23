@@ -8,9 +8,11 @@ import {
   readCustomerProfile,
   readFavoriteSkus,
   readRecentSkus,
+  readThemeMode,
   writeCachedStoreData,
   writeCustomerProfile,
   writeFavoriteSkus,
+  writeThemeMode,
 } from './catalog';
 import { DEFAULT_SETTINGS, type Product } from '../types';
 
@@ -242,5 +244,36 @@ describe('offline-first catalog cache', () => {
       deliveryTime: '3pm',
     });
     expect(readCustomerProfile()?.customerName).toBe('Laura');
+
+    expect(readThemeMode()).toBe('light');
+    writeThemeMode('dark');
+    expect(readThemeMode()).toBe('dark');
+  });
+
+  it('filtra por rangos de presupuesto USD equivalentes (under15, 15to30, over30)', () => {
+    const priced: Product[] = [
+      { ...items[0], sku: 'LOW', price: 12, currency: 'USD' },
+      { ...items[0], id: 'm', sku: 'MID', price: 25, currency: 'USD' },
+      { ...items[0], id: 'h', sku: 'HIGH', price: 45, currency: 'USD' },
+      { ...items[1], sku: 'NONE', price: null },
+    ];
+    const common = {
+      department: 'all' as const,
+      categoryId: 'all',
+      size: 'all',
+      search: '',
+      onlyPriced: false,
+      includeSoldOut: false,
+      sort: 'featured' as const,
+    };
+    expect(
+      filterProducts(priced, { ...common, priceRange: 'under15' }, 980).map((p) => p.sku)
+    ).toEqual(['LOW']);
+    expect(
+      filterProducts(priced, { ...common, priceRange: '15to30' }, 980).map((p) => p.sku)
+    ).toEqual(['MID']);
+    expect(
+      filterProducts(priced, { ...common, priceRange: 'over30' }, 980).map((p) => p.sku)
+    ).toEqual(['HIGH']);
   });
 });

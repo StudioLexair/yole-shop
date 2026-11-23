@@ -11,11 +11,13 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { STORAGE_BUCKET, SUPABASE_URL, supabase } from './supabase';
-import { priceInCup } from './pricing';
+import { priceInCup, priceInUsd } from './pricing';
 
 export type SortMode = 'featured' | 'price_asc' | 'price_desc' | 'newest';
 
 export type DepartmentFilter = Department | 'all' | 'shein_all';
+
+export type PriceRangeFilter = 'all' | 'under15' | '15to30' | 'over30';
 
 export interface CatalogFilters {
   department: DepartmentFilter;
@@ -23,6 +25,7 @@ export interface CatalogFilters {
   size: string;
   search: string;
   onlyPriced: boolean;
+  priceRange?: PriceRangeFilter;
   includeSoldOut: boolean;
   sort: SortMode;
 }
@@ -90,6 +93,13 @@ export function filterProducts(
     if (filters.categoryId !== 'all' && p.category_id !== filters.categoryId) return false;
     if (filters.size !== 'all' && !getAvailableSizes(p).includes(filters.size)) return false;
     if (filters.onlyPriced && (p.price === null || !Number.isFinite(p.price))) return false;
+    if (filters.priceRange && filters.priceRange !== 'all') {
+      const usd = priceInUsd(p.price, p.currency, usdToCupRate);
+      if (usd === null) return false;
+      if (filters.priceRange === 'under15' && usd > 15) return false;
+      if (filters.priceRange === '15to30' && (usd <= 15 || usd > 30)) return false;
+      if (filters.priceRange === 'over30' && usd <= 30) return false;
+    }
     if (tokens.length > 0) {
       const hay = normalizeSearchText(
         `${p.sku} ${p.title} ${p.brand} ${p.quality} ${p.fit_note} ${getAvailableSizes(p).join(' ')}`
@@ -457,6 +467,27 @@ export function clearCustomerProfile(): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.removeItem(CUSTOMER_PROFILE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export type ThemeMode = 'light' | 'dark';
+const THEME_KEY = 'yole_shop_theme_v1';
+
+export function readThemeMode(): ThemeMode {
+  if (typeof window === 'undefined') return 'light';
+  try {
+    return window.localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+export function writeThemeMode(mode: ThemeMode): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(THEME_KEY, mode);
   } catch {
     // ignore
   }

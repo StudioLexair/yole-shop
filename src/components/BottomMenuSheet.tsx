@@ -6,10 +6,13 @@ import {
   Heart,
   Lock,
   MessageCircle,
+  Moon,
   Smartphone,
+  Sun,
   X,
 } from 'lucide-react';
 import type { Currency, Department, StoreSettings } from '../types';
+import type { ThemeMode } from '../lib/catalog';
 import { formatCup } from '../lib/pricing';
 
 interface BottomMenuSheetProps {
@@ -26,6 +29,8 @@ interface BottomMenuSheetProps {
     accesorios: number;
   };
   displayCurrency: Currency;
+  themeMode?: ThemeMode;
+  onToggleTheme?: () => void;
   favoriteCount?: number;
   onlyFavorites?: boolean;
   onToggleFavorites?: () => void;
@@ -47,6 +52,8 @@ export function BottomMenuSheet({
   sheinGender,
   deptCounts,
   displayCurrency,
+  themeMode = 'light',
+  onToggleTheme,
   favoriteCount = 0,
   onlyFavorites = false,
   onToggleFavorites,
@@ -210,14 +217,14 @@ export function BottomMenuSheet({
             </div>
           </div>
 
-          {/* Moneda */}
+          {/* Moneda y Apariencia */}
           <div className="sheet-section">
             <div className="sheet-row-between">
               <div>
                 <span className="sheet-label" style={{ marginBottom: 2 }}>
                   Moneda en pantalla
                 </span>
-                <small style={{ color: '#666', fontSize: 12 }}>
+                <small style={{ color: 'var(--muted)', fontSize: 12 }}>
                   1 USD = {formatCup(settings.usd_to_cup_rate)}
                 </small>
               </div>
@@ -238,6 +245,28 @@ export function BottomMenuSheet({
                 </button>
               </div>
             </div>
+
+            {onToggleTheme && (
+              <div className="sheet-row-between">
+                <div>
+                  <span className="sheet-label" style={{ marginBottom: 2 }}>
+                    Tema de la tienda
+                  </span>
+                  <small style={{ color: 'var(--muted)', fontSize: 12 }}>
+                    {themeMode === 'dark' ? 'Modo Oscuro elegante' : 'Modo Claro editorial'}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={onToggleTheme}
+                  aria-label="Cambiar entre modo claro y oscuro"
+                >
+                  {themeMode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+                  <span>{themeMode === 'dark' ? 'Claro' : 'Oscuro'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Instalar App nativa */}

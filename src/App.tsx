@@ -1,7 +1,9 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ArrowUp,
   Download,
+  Flame,
   Heart,
   Lock,
   MapPin,
@@ -30,12 +32,16 @@ import {
   readCachedStoreData,
   readFavoriteSkus,
   readRecentSkus,
+  readThemeMode,
   writeCachedStoreData,
   writeFavoriteSkus,
+  writeThemeMode,
   type DepartmentFilter,
+  type PriceRangeFilter,
   type SortMode,
+  type ThemeMode,
 } from './lib/catalog';
-import { buildWhatsAppUrl, formatCup, normalizeWhatsAppDigits } from './lib/pricing';
+import { buildWhatsAppUrl, formatCup, getDisplayPrice, normalizeWhatsAppDigits } from './lib/pricing';
 import { SUPABASE_URL, STORAGE_BUCKET } from './lib/supabase';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
@@ -95,9 +101,12 @@ export function App() {
   const [sizeFilter, setSizeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [onlyPriced, setOnlyPriced] = useState(false);
+  const [priceRange, setPriceRange] = useState<PriceRangeFilter>('all');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [favoriteSkus, setFavoriteSkus] = useState<string[]>(() => readFavoriteSkus());
   const [recentSkus, setRecentSkus] = useState<string[]>(() => readRecentSkus());
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readThemeMode());
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [sort, setSort] = useState<SortMode>('featured');
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('CUP');
   const [visibleLimit, setVisibleLimit] = useState(PAGE_STEP);
@@ -121,7 +130,22 @@ export function App() {
       return [];
     }
   });
-  const [addedToast, setAddedToast] = useState('');
+  const [addedToast, setAddedToast] = useState<{ text: string; imageUrl: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset.theme = themeMode;
+    }
+    writeThemeMode(themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowScrollTop(window.scrollY > 460);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     try {
@@ -335,6 +359,14 @@ export function App() {
       .slice(0, 8);
   }, [products, recentSkus, settings.show_sold_out_public]);
 
+  const topFeaturedProducts = useMemo(
+    () =>
+      products
+        .filter((p) => p.featured && p.status === 'active')
+        .slice(0, 14),
+    [products]
+  );
+
   const filteredProducts = useMemo(() => {
     const base = filterProducts(
       products,
@@ -344,6 +376,7 @@ export function App() {
         size: sizeFilter,
         search,
         onlyPriced,
+        priceRange,
         includeSoldOut: settings.show_sold_out_public,
         sort,
       },
@@ -358,6 +391,7 @@ export function App() {
     sizeFilter,
     search,
     onlyPriced,
+    priceRange,
     onlyFavorites,
     favoriteSet,
     settings.show_sold_out_public,
@@ -397,8 +431,11 @@ export function App() {
       }
       return [...prev, { product, size: cleanSize, qty: 1 }];
     });
-    setAddedToast(`Agregado: ${product.title} (${cleanSize})`);
-    setTimeout(() => setAddedToast(''), 2200);
+    setAddedToast({
+      text: `${product.title} (${cleanSize})`,
+      imageUrl: product.image_url,
+    });
+    setTimeout(() => setAddedToast(null), 2400);
   };
 
   const handleUpdateQty = (sku: string, size: string, delta: number) => {
@@ -814,6 +851,33 @@ export function App() {
           </div>
         )}
 
+        {/* Budget Filter Chips */}
+        <div className="sizes-filter-row" aria-label="Filtrar por presupuesto">
+          <span className="sizes-filter-label">Presupuesto:</span>
+          <div className="chips-scroller chips-scroller--compact">
+            {(
+              [
+                ['all', 'Todos'],
+                ['under15', 'Hasta $15 USD'],
+                ['15to30', '$15 – $30 USD'],
+                ['over30', '+$30 USD'],
+              ] as Array<[PriceRangeFilter, string]>
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                className={`chip chip--sm${priceRange === val ? ' is-active' : ''}`}
+                onClick={() => {
+                  setPriceRange(val);
+                  setVisibleLimit(PAGE_STEP);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Active Result Count */}
         <div className="results-meta">
           <span>
@@ -824,6 +888,7 @@ export function App() {
             sheinGender !== 'all' ||
             categoryId !== 'all' ||
             sizeFilter !== 'all' ||
+            priceRange !== 'all' ||
             search ||
             onlyPriced ||
             onlyFavorites) && (
@@ -835,6 +900,7 @@ export function App() {
                 setSheinGender('all');
                 setCategoryId('all');
                 setSizeFilter('all');
+                setPriceRange('all');
                 setSearch('');
                 setOnlyPriced(false);
                 setOnlyFavorites(false);
@@ -845,11 +911,59 @@ export function App() {
           )}
         </div>
 
+        {/* Carrusel Lo más TOP (en catálogo amplio sin filtros activos) */}
+        {!loading &&
+          products.length >= 6 &&
+          topFeaturedProducts.length > 0 &&
+          department === 'all' &&
+          categoryId === 'all' &&
+          sizeFilter === 'all' &&
+          priceRange === 'all' &&
+          !search &&
+          !onlyFavorites && (
+            <section className="top-carousel-section" aria-label="Lo más TOP">
+              <div className="recent-strip__head">
+                <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Flame size={15} className="top-flame-icon" /> Lo más TOP
+                </strong>
+                <span>Desliza para ver lo más pedido</span>
+              </div>
+              <div className="top-carousel-scroller">
+                {topFeaturedProducts.map((tp) => {
+                  const tpPrice = getDisplayPrice(
+                    tp,
+                    displayCurrency,
+                    settings.usd_to_cup_rate
+                  );
+                  return (
+                    <button
+                      key={`top-${tp.sku}`}
+                      type="button"
+                      className="top-mini-card"
+                      onClick={() => openProductModal(tp)}
+                    >
+                      <div className="top-mini-card__media">
+                        <img src={tp.image_url} alt={tp.title} loading="lazy" />
+                        <span className="p-badge p-badge--feat">TOP</span>
+                      </div>
+                      <div className="top-mini-card__body">
+                        <small>{tp.brand}</small>
+                        <span className="top-mini-card__title">{tp.title}</span>
+                        <strong>{tpPrice.primary}</strong>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
         {/* Vistos recientemente */}
         {recentProducts.length > 0 &&
           department === 'all' &&
           categoryId === 'all' &&
           sizeFilter === 'all' &&
+          priceRange === 'all' &&
           !search &&
           !onlyFavorites && (
             <section className="recent-strip" aria-label="Vistos recientemente">
@@ -877,7 +991,18 @@ export function App() {
           )}
 
         {loading ? (
-          <div className="catalog-state">Cargando catálogo de {settings.store_name}...</div>
+          <div className="products-grid" aria-label="Cargando catálogo">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <div key={idx} className="p-card p-card-skeleton" aria-hidden="true">
+                <div className="p-card__media skeleton-shimmer" />
+                <div className="p-card__body">
+                  <div className="skeleton-line skeleton-line--sm skeleton-shimmer" />
+                  <div className="skeleton-line skeleton-line--lg skeleton-shimmer" />
+                  <div className="skeleton-line skeleton-line--md skeleton-shimmer" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : loadError ? (
           <div className="catalog-state catalog-state--err">
             <p>{loadError}</p>
@@ -900,6 +1025,7 @@ export function App() {
                 setSheinGender('all');
                 setCategoryId('all');
                 setSizeFilter('all');
+                setPriceRange('all');
                 setSearch('');
                 setOnlyPriced(false);
                 setOnlyFavorites(false);
@@ -972,10 +1098,25 @@ export function App() {
 
       {addedToast && (
         <div className="shop-toast" role="status" onClick={() => setCartOpen(true)}>
-          <ShoppingBag size={16} />
-          <span>{addedToast}</span>
+          <img src={addedToast.imageUrl} alt="" className="shop-toast__thumb" />
+          <div className="shop-toast__info">
+            <small>Agregado al carrito</small>
+            <span>{addedToast.text}</span>
+          </div>
           <strong>Ver carrito</strong>
         </div>
+      )}
+
+      {showScrollTop && (
+        <button
+          type="button"
+          className="scroll-top-btn"
+          aria-label="Subir arriba"
+          title="Volver arriba"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        >
+          <ArrowUp size={18} />
+        </button>
       )}
 
       {selectedProduct && (
@@ -1014,6 +1155,10 @@ export function App() {
         sheinGender={sheinGender}
         deptCounts={deptCounts}
         displayCurrency={displayCurrency}
+        themeMode={themeMode}
+        onToggleTheme={() =>
+          setThemeMode((m) => (m === 'dark' ? 'light' : 'dark'))
+        }
         favoriteCount={favoriteSkus.length}
         onlyFavorites={onlyFavorites}
         onToggleFavorites={() => {
