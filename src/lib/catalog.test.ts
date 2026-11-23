@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterProducts, collectAvailableSizes } from './catalog';
+import { filterProducts, collectAvailableSizes, makePresetSlug } from './catalog';
 import type { Product } from '../types';
 
 const items: Product[] = [
@@ -117,5 +117,10 @@ describe('catalog filters', () => {
 
   it('ordena tallas numéricas y de ropa correctamente', () => {
     expect(collectAvailableSizes(items)).toEqual(['40', '41', 'S', 'M']);
+  });
+
+  it('genera slugs limpios para nuevos grupos de precio', () => {
+    expect(makePresetSlug('Vestidos cortos (Mujer)')).toBe('vestidos-cortos-mujer');
+    expect(makePresetSlug('Enguatadas de gorro · Niño')).toBe('enguatadas-de-gorro-nino');
   });
 });

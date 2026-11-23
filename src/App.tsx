@@ -14,6 +14,7 @@ import type {
   Category,
   Currency,
   Department,
+  PricePreset,
   Product,
   StoreSettings,
 } from './types';
@@ -49,6 +50,7 @@ export function App() {
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [pricePresets, setPricePresets] = useState<PricePreset[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -99,6 +101,7 @@ export function App() {
       setSettings(data.settings);
       setCategories(data.categories);
       setProducts(data.products);
+      setPricePresets(data.pricePresets || []);
     } catch (err) {
       setLoadError(
         err instanceof Error ? err.message : 'No se pudo conectar con el catálogo.'
@@ -251,6 +254,7 @@ export function App() {
           settings={settings}
           categories={categories}
           products={products}
+          pricePresets={pricePresets}
           onRefresh={refreshData}
           onBackToStore={() => navigateAdmin(false)}
         />

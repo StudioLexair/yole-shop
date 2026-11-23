@@ -32,6 +32,18 @@ export interface Category {
   sort_order: number;
 }
 
+export interface PricePreset {
+  id: string;
+  name: string;
+  department: Department;
+  currency: Currency;
+  cost_price: number | null;
+  price: number;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Product {
   id: string;
   sku: string;
@@ -39,6 +51,7 @@ export interface Product {
   brand: string;
   department: Department;
   category_id: string;
+  price_preset_id?: string | null;
   quality: string;
   currency: Currency;
   cost_price: number | null;
@@ -92,7 +105,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   tagline: 'Calzado urbano, moda Shein y accesorios en Santa Clara',
   whatsapp_number: '5352678747',
   location_text: 'Santa Clara, Villa Clara · Cuba',
-  usd_to_cup_rate: 920,
+  usd_to_cup_rate: 980,
   delivery_fee_cup: 300,
   transfer_surcharge_pct: 20,
   shein_under_20_markup: 2,

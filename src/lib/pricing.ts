@@ -51,7 +51,7 @@ export function priceInCup(
 ): number | null {
   if (price === null || !Number.isFinite(price)) return null;
   if (currency === 'CUP') return Math.round(price);
-  return Math.round(price * (usdToCupRate > 0 ? usdToCupRate : 920));
+  return Math.round(price * (usdToCupRate > 0 ? usdToCupRate : 980));
 }
 
 export function priceInUsd(
@@ -61,7 +61,7 @@ export function priceInUsd(
 ): number | null {
   if (price === null || !Number.isFinite(price)) return null;
   if (currency === 'USD') return Math.round(price * 100) / 100;
-  const rate = usdToCupRate > 0 ? usdToCupRate : 920;
+  const rate = usdToCupRate > 0 ? usdToCupRate : 980;
   return Math.round((price / rate) * 100) / 100;
 }
 
@@ -114,7 +114,7 @@ export function summarizeCart(
   let totalUnits = 0;
   let subtotalCup = 0;
   let hasUnpricedItems = false;
-  const rate = settings.usd_to_cup_rate > 0 ? settings.usd_to_cup_rate : 920;
+  const rate = settings.usd_to_cup_rate > 0 ? settings.usd_to_cup_rate : 980;
 
   for (const item of items) {
     totalUnits += item.qty;

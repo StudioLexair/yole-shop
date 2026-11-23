@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.store_settings (
   tagline TEXT NOT NULL DEFAULT 'Calzado urbano, moda Shein y accesorios en Santa Clara',
   whatsapp_number TEXT NOT NULL DEFAULT '5352678747',
   location_text TEXT NOT NULL DEFAULT 'Santa Clara, Villa Clara · Cuba',
-  usd_to_cup_rate NUMERIC(10,2) NOT NULL DEFAULT 920,
+  usd_to_cup_rate NUMERIC(10,2) NOT NULL DEFAULT 980,
   delivery_fee_cup NUMERIC(10,2) NOT NULL DEFAULT 300,
   transfer_surcharge_pct NUMERIC(5,2) NOT NULL DEFAULT 20,
   shein_under_20_markup NUMERIC(10,2) NOT NULL DEFAULT 2,
@@ -109,6 +109,32 @@ ON CONFLICT (id) DO UPDATE SET
   department = EXCLUDED.department,
   sort_order = EXCLUDED.sort_order;
 
+-- 3b. Grupos / plantillas de precios masivos
+CREATE TABLE IF NOT EXISTS public.price_presets (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  department TEXT NOT NULL CHECK (department IN ('calzado', 'moda_shein', 'hombre', 'accesorios')),
+  currency TEXT NOT NULL DEFAULT 'USD' CHECK (currency IN ('CUP', 'USD')),
+  cost_price NUMERIC(12,2),
+  price NUMERIC(12,2) NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 100,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.price_presets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "price_presets_public_read" ON public.price_presets;
+CREATE POLICY "price_presets_public_read" ON public.price_presets
+  FOR SELECT TO anon, authenticated
+  USING (TRUE);
+
+DROP POLICY IF EXISTS "price_presets_admin_write" ON public.price_presets;
+CREATE POLICY "price_presets_admin_write" ON public.price_presets
+  FOR ALL TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
 -- 4. Productos
 CREATE TABLE IF NOT EXISTS public.products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -117,6 +143,7 @@ CREATE TABLE IF NOT EXISTS public.products (
   brand TEXT NOT NULL DEFAULT 'Yole Shop',
   department TEXT NOT NULL CHECK (department IN ('calzado', 'moda_shein', 'hombre', 'accesorios')),
   category_id TEXT NOT NULL REFERENCES public.categories(id) ON UPDATE CASCADE,
+  price_preset_id TEXT REFERENCES public.price_presets(id) ON DELETE SET NULL,
   quality TEXT NOT NULL DEFAULT '',
   currency TEXT NOT NULL DEFAULT 'CUP' CHECK (currency IN ('CUP', 'USD')),
   cost_price NUMERIC(12,2),
@@ -135,6 +162,7 @@ CREATE TABLE IF NOT EXISTS public.products (
 
 CREATE INDEX IF NOT EXISTS idx_products_dept ON public.products(department);
 CREATE INDEX IF NOT EXISTS idx_products_cat ON public.products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_preset ON public.products(price_preset_id);
 CREATE INDEX IF NOT EXISTS idx_products_status ON public.products(status);
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -248,4 +276,9 @@ CREATE TRIGGER trg_products_updated_at
 DROP TRIGGER IF EXISTS trg_settings_updated_at ON public.store_settings;
 CREATE TRIGGER trg_settings_updated_at
   BEFORE UPDATE ON public.store_settings
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+DROP TRIGGER IF EXISTS trg_price_presets_updated_at ON public.price_presets;
+CREATE TRIGGER trg_price_presets_updated_at
+  BEFORE UPDATE ON public.price_presets
   FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();

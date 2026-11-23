@@ -1,9 +1,12 @@
 import type {
   Category,
+  Currency,
   Department,
   Order,
   OrderStatus,
+  PricePreset,
   Product,
+  ProductStatus,
   StoreSettings,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
@@ -103,8 +106,9 @@ export async function fetchStoreData(): Promise<{
   settings: StoreSettings;
   categories: Category[];
   products: Product[];
+  pricePresets?: PricePreset[];
 }> {
-  const [settingsRes, categoriesRes, productsRes] = await Promise.all([
+  const [settingsRes, categoriesRes, productsRes, presetsRes] = await Promise.all([
     supabase.from('store_settings').select('*').eq('id', 'default').maybeSingle(),
     supabase.from('categories').select('*').order('sort_order', { ascending: true }),
     supabase
@@ -112,6 +116,11 @@ export async function fetchStoreData(): Promise<{
       .select('*')
       .order('sort_order', { ascending: true })
       .order('sku', { ascending: true }),
+    supabase
+      .from('price_presets')
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true }),
   ]);
 
   if (settingsRes.error) throw settingsRes.error;
@@ -139,10 +148,17 @@ export async function fetchStoreData(): Promise<{
     sizes: Array.isArray(row.sizes) ? row.sizes : [],
   }));
 
+  const pricePresets: PricePreset[] = (presetsRes.data || []).map((row) => ({
+    ...row,
+    cost_price: row.cost_price !== null && row.cost_price !== undefined ? Number(row.cost_price) : null,
+    price: Number(row.price) || 0,
+  }));
+
   return {
     settings,
     categories: (categoriesRes.data || []) as Category[],
     products,
+    pricePresets,
   };
 }
 
@@ -193,6 +209,70 @@ export async function saveProduct(
 
 export async function deleteProduct(id: string): Promise<void> {
   const { error } = await supabase.from('products').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export function makePresetSlug(name: string): string {
+  const base = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || `grupo-${Date.now()}`;
+}
+
+export async function savePricePreset(
+  preset: Omit<PricePreset, 'created_at' | 'updated_at'>
+): Promise<PricePreset> {
+  const { data, error } = await supabase
+    .from('price_presets')
+    .upsert(preset, { onConflict: 'id' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return {
+    ...data,
+    cost_price: data.cost_price !== null ? Number(data.cost_price) : null,
+    price: Number(data.price) || 0,
+  };
+}
+
+export async function deletePricePreset(id: string): Promise<void> {
+  const { error } = await supabase.from('price_presets').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function applyPresetToLinkedProducts(
+  preset: Pick<PricePreset, 'id' | 'currency' | 'cost_price' | 'price'>
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('products')
+    .update({
+      currency: preset.currency,
+      cost_price: preset.cost_price,
+      price: preset.price,
+    })
+    .eq('price_preset_id', preset.id)
+    .select('id');
+  if (error) throw error;
+  return (data || []).length;
+}
+
+export async function bulkUpdateProducts(
+  ids: string[],
+  patch: Partial<{
+    price: number | null;
+    cost_price: number | null;
+    currency: Currency;
+    price_preset_id: string | null;
+    status: ProductStatus;
+    department: Department;
+    category_id: string;
+  }>
+): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from('products').update(patch).in('id', ids);
   if (error) throw error;
 }
 

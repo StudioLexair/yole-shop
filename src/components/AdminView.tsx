@@ -5,6 +5,7 @@ import {
   Check,
   Download,
   ImagePlus,
+  Layers,
   Lock,
   LogOut,
   Package,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  Zap,
 } from 'lucide-react';
 import type {
   Category,
@@ -24,6 +26,7 @@ import type {
   Department,
   Order,
   OrderStatus,
+  PricePreset,
   Product,
   ProductStatus,
   StoreSettings,
@@ -37,8 +40,13 @@ import {
 } from '../lib/pricing';
 import { formatKb, optimizeImageToWebP } from '../lib/imageOptimizer';
 import {
+  applyPresetToLinkedProducts,
+  bulkUpdateProducts,
+  deletePricePreset,
   deleteProduct,
   fetchOrders,
+  makePresetSlug,
+  savePricePreset,
   saveProduct,
   saveStoreSettings,
   updateOrderStatus,
@@ -50,12 +58,21 @@ interface AdminViewProps {
   settings: StoreSettings;
   categories: Category[];
   products: Product[];
+  pricePresets: PricePreset[];
   onRefresh: () => Promise<void>;
   onBackToStore: () => void;
 }
 
-type AdminTab = 'products' | 'orders' | 'settings' | 'security';
-type QuickFilter = 'all' | 'unpriced' | 'calzado' | 'moda_shein' | 'hombre' | 'accesorios' | 'sold_out' | 'hidden';
+type AdminTab = 'products' | 'presets' | 'orders' | 'settings' | 'security';
+type QuickFilter =
+  | 'all'
+  | 'unpriced'
+  | 'calzado'
+  | 'moda_shein'
+  | 'hombre'
+  | 'accesorios'
+  | 'sold_out'
+  | 'hidden';
 
 interface RowDraft {
   title: string;
@@ -69,6 +86,15 @@ interface RowDraft {
   featured: boolean;
   category_id: string;
   department: Department;
+  price_preset_id: string;
+  dirty: boolean;
+}
+
+interface PresetDraft {
+  name: string;
+  department: Department;
+  currency: Currency;
+  priceStr: string;
   dirty: boolean;
 }
 
@@ -85,14 +111,31 @@ function makeDraft(p: Product): RowDraft {
     featured: p.featured,
     category_id: p.category_id,
     department: p.department,
+    price_preset_id: p.price_preset_id || '',
     dirty: false,
   };
+}
+
+function makePresetDraft(pr: PricePreset): PresetDraft {
+  return {
+    name: pr.name,
+    department: pr.department,
+    currency: pr.currency,
+    priceStr: String(pr.price),
+    dirty: false,
+  };
+}
+
+function formatPresetShort(pr: PricePreset): string {
+  const val = pr.currency === 'USD' ? `$${pr.price} USD` : formatCup(pr.price);
+  return `${pr.name} — ${val}`;
 }
 
 export function AdminView({
   settings,
   categories,
   products,
+  pricePresets,
   onRefresh,
   onBackToStore,
 }: AdminViewProps) {
@@ -104,11 +147,36 @@ export function AdminView({
 
   const [tab, setTab] = useState<AdminTab>('products');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [presetFilter, setPresetFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingAllDirty, setSavingAllDirty] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [autoSaveOnPreset, setAutoSaveOnPreset] = useState(true);
   const [toast, setToast] = useState('');
+
+  // Quick USD rate inline editor
+  const [quickRateStr, setQuickRateStr] = useState(String(settings.usd_to_cup_rate));
+  const [savingQuickRate, setSavingQuickRate] = useState(false);
+
+  // Bulk selection & actions
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkPresetId, setBulkPresetId] = useState<string>('');
+  const [bulkPriceMode, setBulkPriceMode] = useState<'set' | 'add' | 'sub'>('set');
+  const [bulkPriceVal, setBulkPriceVal] = useState('');
+  const [bulkCurrency, setBulkCurrency] = useState<Currency>('USD');
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  // Price Presets tab state
+  const [presetDeptFilter, setPresetDeptFilter] = useState<Department | 'all'>('all');
+  const [presetDrafts, setPresetDrafts] = useState<Record<string, PresetDraft>>({});
+  const [savingPresetId, setSavingPresetId] = useState<string | null>(null);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetDept, setNewPresetDept] = useState<Department>('moda_shein');
+  const [newPresetCurr, setNewPresetCurr] = useState<Currency>('USD');
+  const [newPresetPrice, setNewPresetPrice] = useState('');
+  const [creatingPreset, setCreatingPreset] = useState(false);
 
   // Orders state
   const [orders, setOrders] = useState<Order[]>([]);
@@ -124,6 +192,7 @@ export function AdminView({
   const [newBrand, setNewBrand] = useState('SHEIN');
   const [newDept, setNewDept] = useState<Department>('moda_shein');
   const [newCat, setNewCat] = useState('vestidos-shein');
+  const [newPresetId, setNewPresetId] = useState('');
   const [newQuality, setNewQuality] = useState('SHEIN');
   const [newCurrency, setNewCurrency] = useState<Currency>('USD');
   const [newCost, setNewCost] = useState('');
@@ -141,11 +210,12 @@ export function AdminView({
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3200);
+    setTimeout(() => setToast(''), 3400);
   };
 
   useEffect(() => {
     setCfg(settings);
+    setQuickRateStr(String(settings.usd_to_cup_rate));
   }, [settings]);
 
   useEffect(() => {
@@ -154,7 +224,19 @@ export function AdminView({
       map[p.id] = makeDraft(p);
     }
     setDrafts(map);
+    setSelectedIds((prev) => prev.filter((id) => products.some((p) => p.id === id)));
   }, [products]);
+
+  useEffect(() => {
+    const pmap: Record<string, PresetDraft> = {};
+    for (const pr of pricePresets) {
+      pmap[pr.id] = makePresetDraft(pr);
+    }
+    setPresetDrafts(pmap);
+    if (!bulkPresetId && pricePresets.length > 0) {
+      setBulkPresetId(pricePresets[0].id);
+    }
+  }, [pricePresets]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -204,6 +286,16 @@ export function AdminView({
     return { total: products.length, active, unpriced, soldOut };
   }, [products]);
 
+  const presetCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of products) {
+      if (p.price_preset_id) {
+        counts[p.price_preset_id] = (counts[p.price_preset_id] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
@@ -219,13 +311,66 @@ export function AdminView({
       ) {
         return false;
       }
+      if (presetFilter === 'none' && p.price_preset_id) return false;
+      if (presetFilter !== 'all' && presetFilter !== 'none' && p.price_preset_id !== presetFilter) {
+        return false;
+      }
       if (q) {
-        const hay = `${p.sku} ${p.title} ${p.brand} ${p.quality}`.toLowerCase();
+        const hay = `${p.sku} ${p.title} ${p.brand} ${p.quality} ${p.fit_note}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [products, quickFilter, search]);
+  }, [products, quickFilter, presetFilter, search]);
+
+  const dirtyProducts = useMemo(
+    () => products.filter((p) => drafts[p.id]?.dirty),
+    [products, drafts]
+  );
+
+  const visibleSelectedCount = useMemo(
+    () => filteredProducts.filter((p) => selectedIds.includes(p.id)).length,
+    [filteredProducts, selectedIds]
+  );
+
+  const allVisibleSelected =
+    filteredProducts.length > 0 && visibleSelectedCount === filteredProducts.length;
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      const visibleSet = new Set(filteredProducts.map((p) => p.id));
+      setSelectedIds((prev) => prev.filter((id) => !visibleSet.has(id)));
+    } else {
+      const merged = new Set([...selectedIds, ...filteredProducts.map((p) => p.id)]);
+      setSelectedIds(Array.from(merged));
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSaveQuickRate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const rate = Number(quickRateStr);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      showToast('Ingresa una tasa válida en CUP');
+      return;
+    }
+    setSavingQuickRate(true);
+    try {
+      const updated = { ...cfg, usd_to_cup_rate: Math.round(rate) };
+      await saveStoreSettings(updated);
+      await onRefresh();
+      showToast(`Tasa actualizada: 1 USD = ${formatCup(updated.usd_to_cup_rate)}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error guardando tasa');
+    } finally {
+      setSavingQuickRate(false);
+    }
+  };
 
   const updateDraft = (id: string, patch: Partial<RowDraft>, autoCalcShein = false) => {
     setDrafts((prev) => {
@@ -243,6 +388,55 @@ export function AdminView({
       }
       return { ...prev, [id]: next };
     });
+  };
+
+  const handleRowPresetChange = async (p: Product, nextPresetId: string) => {
+    const preset = pricePresets.find((pr) => pr.id === nextPresetId) || null;
+    if (!preset) {
+      updateDraft(p.id, { price_preset_id: '' });
+      if (autoSaveOnPreset) {
+        setSavingId(p.id);
+        try {
+          await bulkUpdateProducts([p.id], { price_preset_id: null });
+          await onRefresh();
+          showToast(`${p.sku} desvinculado del grupo`);
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : 'Error actualizando');
+        } finally {
+          setSavingId(null);
+        }
+      }
+      return;
+    }
+
+    updateDraft(p.id, {
+      price_preset_id: preset.id,
+      priceStr: String(preset.price),
+      currency: preset.currency,
+      costStr: preset.cost_price !== null ? String(preset.cost_price) : '',
+    });
+
+    if (autoSaveOnPreset) {
+      setSavingId(p.id);
+      try {
+        await bulkUpdateProducts([p.id], {
+          price_preset_id: preset.id,
+          price: preset.price,
+          currency: preset.currency,
+          cost_price: preset.cost_price,
+        });
+        await onRefresh();
+        showToast(
+          `${p.sku} → ${preset.name} (${
+            preset.currency === 'USD' ? formatUsd(preset.price) : formatCup(preset.price)
+          })`
+        );
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Error asignando grupo');
+      } finally {
+        setSavingId(null);
+      }
+    }
   };
 
   const handleSaveRow = async (p: Product) => {
@@ -264,6 +458,7 @@ export function AdminView({
         brand: d.brand.trim() || p.brand,
         department: d.department,
         category_id: d.category_id,
+        price_preset_id: d.price_preset_id || null,
         quality: p.quality,
         currency: d.currency,
         cost_price: Number.isFinite(costNum as number) ? costNum : null,
@@ -283,6 +478,219 @@ export function AdminView({
       showToast(err instanceof Error ? err.message : 'Error guardando producto');
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleSaveAllDirty = async () => {
+    if (dirtyProducts.length === 0) return;
+    setSavingAllDirty(true);
+    try {
+      for (const p of dirtyProducts) {
+        const d = drafts[p.id];
+        if (!d) continue;
+        const costNum = d.costStr.trim() === '' ? null : Number(d.costStr);
+        const priceNum = d.priceStr.trim() === '' ? null : Number(d.priceStr);
+        const sizesArr = d.sizesStr
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        await saveProduct({
+          id: p.id,
+          sku: p.sku,
+          title: d.title.trim() || p.title,
+          brand: d.brand.trim() || p.brand,
+          department: d.department,
+          category_id: d.category_id,
+          price_preset_id: d.price_preset_id || null,
+          quality: p.quality,
+          currency: d.currency,
+          cost_price: Number.isFinite(costNum as number) ? costNum : null,
+          price: Number.isFinite(priceNum as number) ? priceNum : null,
+          sizes: sizesArr,
+          fit_note: d.fit_note.trim(),
+          image_url: p.image_url,
+          image_path: p.image_path,
+          status: d.status,
+          featured: d.featured,
+          source_group: p.source_group,
+          sort_order: p.sort_order,
+        });
+      }
+      await onRefresh();
+      showToast(`Se guardaron ${dirtyProducts.length} cambios pendientes`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error guardando cambios');
+    } finally {
+      setSavingAllDirty(false);
+    }
+  };
+
+  // Bulk actions
+  const handleBulkApplyPreset = async () => {
+    const preset = pricePresets.find((pr) => pr.id === bulkPresetId);
+    if (!preset || selectedIds.length === 0) return;
+    setBulkBusy(true);
+    try {
+      await bulkUpdateProducts(selectedIds, {
+        price_preset_id: preset.id,
+        price: preset.price,
+        currency: preset.currency,
+        cost_price: preset.cost_price,
+      });
+      await onRefresh();
+      showToast(
+        `Grupo "${preset.name}" aplicado a ${selectedIds.length} productos`
+      );
+      setSelectedIds([]);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error en aplicación masiva');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkApplyManualPrice = async () => {
+    const num = Number(bulkPriceVal);
+    if (!Number.isFinite(num) || num < 0 || selectedIds.length === 0) {
+      showToast('Escribe un valor numérico válido');
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      if (bulkPriceMode === 'set') {
+        await bulkUpdateProducts(selectedIds, {
+          price: num,
+          currency: bulkCurrency,
+          price_preset_id: null,
+        });
+      } else {
+        const delta = bulkPriceMode === 'add' ? num : -num;
+        const selectedProducts = products.filter((p) => selectedIds.includes(p.id));
+        await Promise.all(
+          selectedProducts.map((p) => {
+            const base = p.price ?? 0;
+            const nextVal = Math.max(0, Math.round((base + delta) * 100) / 100);
+            return bulkUpdateProducts([p.id], {
+              price: nextVal,
+              currency: p.price !== null ? p.currency : bulkCurrency,
+            });
+          })
+        );
+      }
+      await onRefresh();
+      showToast(`Precio actualizado en ${selectedIds.length} productos`);
+      setBulkPriceVal('');
+      setSelectedIds([]);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error actualizando precios');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkStatusOrConsult = async (mode: ProductStatus | 'consult') => {
+    if (selectedIds.length === 0) return;
+    setBulkBusy(true);
+    try {
+      if (mode === 'consult') {
+        await bulkUpdateProducts(selectedIds, {
+          price: null,
+          price_preset_id: null,
+        });
+        showToast(`${selectedIds.length} productos pasados a "Consultar"`);
+      } else {
+        await bulkUpdateProducts(selectedIds, { status: mode });
+        showToast(`${selectedIds.length} productos marcados como ${mode}`);
+      }
+      await onRefresh();
+      setSelectedIds([]);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error en acción masiva');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  // Price Presets handlers
+  const handleSaveAndApplyPreset = async (pr: PricePreset) => {
+    const d = presetDrafts[pr.id];
+    if (!d) return;
+    const priceNum = Number(d.priceStr);
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      showToast('El precio del grupo debe ser un número válido');
+      return;
+    }
+    setSavingPresetId(pr.id);
+    try {
+      const saved = await savePricePreset({
+        id: pr.id,
+        name: d.name.trim() || pr.name,
+        department: d.department,
+        currency: d.currency,
+        cost_price: pr.cost_price,
+        price: priceNum,
+        sort_order: pr.sort_order,
+      });
+      const updatedCount = await applyPresetToLinkedProducts(saved);
+      await onRefresh();
+      showToast(
+        `"${saved.name}" guardado y aplicado a ${updatedCount} productos vinculados`
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error guardando grupo');
+    } finally {
+      setSavingPresetId(null);
+    }
+  };
+
+  const handleCreatePreset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const priceNum = Number(newPresetPrice);
+    if (!newPresetName.trim() || !Number.isFinite(priceNum) || priceNum <= 0) {
+      showToast('Completa el nombre y un precio mayor a 0');
+      return;
+    }
+    setCreatingPreset(true);
+    try {
+      const slug = `${newPresetDept.split('_')[0]}-${makePresetSlug(newPresetName)}`;
+      const exists = pricePresets.some((p) => p.id === slug);
+      const id = exists ? `${slug}-${Date.now().toString().slice(-4)}` : slug;
+      const nextSort =
+        pricePresets.reduce((m, p) => Math.max(m, p.sort_order), 0) + 10;
+
+      await savePricePreset({
+        id,
+        name: newPresetName.trim(),
+        department: newPresetDept,
+        currency: newPresetCurr,
+        cost_price: null,
+        price: priceNum,
+        sort_order: nextSort,
+      });
+      setNewPresetName('');
+      setNewPresetPrice('');
+      await onRefresh();
+      showToast(`Grupo "${newPresetName.trim()}" creado`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error creando grupo');
+    } finally {
+      setCreatingPreset(false);
+    }
+  };
+
+  const handleDeletePreset = async (pr: PricePreset) => {
+    const linked = presetCounts[pr.id] || 0;
+    const msg =
+      linked > 0
+        ? `¿Eliminar el grupo "${pr.name}"? Sus ${linked} productos mantendrán su precio actual pero quedarán sin grupo.`
+        : `¿Eliminar el grupo "${pr.name}"?`;
+    if (!window.confirm(msg)) return;
+    try {
+      await deletePricePreset(pr.id);
+      await onRefresh();
+      showToast(`Grupo "${pr.name}" eliminado`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error eliminando grupo');
     }
   };
 
@@ -332,6 +740,18 @@ export function AdminView({
     }
   };
 
+  const handleSelectNewProductPreset = (pid: string) => {
+    setNewPresetId(pid);
+    const pr = pricePresets.find((x) => x.id === pid);
+    if (pr) {
+      setNewDept(pr.department);
+      setNewCurrency(pr.currency);
+      setNewPrice(String(pr.price));
+      const firstCat = categories.find((c) => c.department === pr.department);
+      if (firstCat) setNewCat(firstCat.id);
+    }
+  };
+
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFile || !newTitle.trim()) return;
@@ -355,6 +775,7 @@ export function AdminView({
         brand: newBrand.trim() || 'Yole Shop',
         department: newDept,
         category_id: newCat,
+        price_preset_id: newPresetId || null,
         quality: newQuality.trim(),
         currency: newCurrency,
         cost_price: Number.isFinite(costNum as number) ? costNum : null,
@@ -374,6 +795,7 @@ export function AdminView({
 
       setNewOpen(false);
       setNewTitle('');
+      setNewPresetId('');
       setNewCost('');
       setNewPrice('');
       setNewNote('');
@@ -434,13 +856,28 @@ export function AdminView({
   };
 
   const handleExportCsv = () => {
-    const header = ['SKU', 'Titulo', 'Marca', 'Departamento', 'Categoria', 'Calidad', 'Moneda', 'Costo', 'Venta', 'Tallas', 'Estado', 'Imagen'];
+    const header = [
+      'SKU',
+      'Titulo',
+      'Marca',
+      'Departamento',
+      'Categoria',
+      'GrupoPrecio',
+      'Calidad',
+      'Moneda',
+      'Costo',
+      'Venta',
+      'Tallas',
+      'Estado',
+      'Imagen',
+    ];
     const rows = products.map((p) => [
       p.sku,
       `"${p.title.replace(/"/g, '""')}"`,
       p.brand,
       p.department,
       p.category_id,
+      p.price_preset_id || '',
       p.quality,
       p.currency,
       p.cost_price ?? '',
@@ -456,6 +893,11 @@ export function AdminView({
     a.download = `yole-shop-catalogo-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
   };
+
+  const filteredPresets = useMemo(() => {
+    if (presetDeptFilter === 'all') return pricePresets;
+    return pricePresets.filter((pr) => pr.department === presetDeptFilter);
+  }, [pricePresets, presetDeptFilter]);
 
   if (authLoading) {
     return (
@@ -477,7 +919,7 @@ export function AdminView({
               <Lock size={22} />
             </div>
             <h1>Panel Admin · {settings.store_name}</h1>
-            <p>Gestiona productos, precios Shein (+2/+3 USD), fotos WebP y pedidos WhatsApp.</p>
+            <p>Gestiona precios por grupos, tasa USD, fotos WebP y pedidos WhatsApp.</p>
           </div>
           <form onSubmit={handleLogin} className="admin-login-form">
             <label className="field">
@@ -533,6 +975,13 @@ export function AdminView({
           </button>
           <button
             type="button"
+            className={tab === 'presets' ? 'is-active' : ''}
+            onClick={() => setTab('presets')}
+          >
+            <Layers size={16} /> Grupos de Precio ({pricePresets.length})
+          </button>
+          <button
+            type="button"
             className={tab === 'orders' ? 'is-active' : ''}
             onClick={() => setTab('orders')}
           >
@@ -578,19 +1027,225 @@ export function AdminView({
             <span>Activos en tienda</span>
             <strong>{kpis.active}</strong>
           </div>
-          <div className="kpi-card kpi-card--warn">
-            <span>Sin precio (pendiente Shein/acc.)</span>
+          <div className={`kpi-card${kpis.unpriced > 0 ? ' kpi-card--warn' : ''}`}>
+            <span>En &quot;Consultar&quot; (sin precio)</span>
             <strong>{kpis.unpriced}</strong>
           </div>
           <div className="kpi-card">
-            <span>Agotados</span>
-            <strong>{kpis.soldOut}</strong>
+            <span>Grupos de precio guardados</span>
+            <strong>{pricePresets.length}</strong>
           </div>
-          <div className="kpi-card">
-            <span>Tasa USD actual</span>
-            <strong>{formatCup(cfg.usd_to_cup_rate)}</strong>
-          </div>
+          <form className="kpi-card kpi-card--rate" onSubmit={handleSaveQuickRate}>
+            <span>Tasa rápida (1 USD → CUP)</span>
+            <div className="kpi-rate-row">
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={quickRateStr}
+                onChange={(e) => setQuickRateStr(e.target.value)}
+                aria-label="Tasa USD del día en CUP"
+              />
+              <button
+                type="submit"
+                className="btn btn--primary btn--sm"
+                disabled={savingQuickRate}
+              >
+                {savingQuickRate ? '...' : 'Guardar'}
+              </button>
+            </div>
+          </form>
         </section>
+
+        {tab === 'presets' && (
+          <section className="admin-panel">
+            <div className="admin-panel-head">
+              <div>
+                <h2 style={{ margin: '0 0 4px' }}>Grupos de Precio Masivos</h2>
+                <p style={{ margin: 0, fontSize: 13, color: '#666' }}>
+                  Cambia el precio de un grupo (ej. Vestidos cortos, Enguatadas, Jordan 3A) y pulsa{' '}
+                  <strong>Guardar y aplicar</strong> para actualizar todos sus productos de una vez.
+                </p>
+              </div>
+            </div>
+
+            <form className="preset-create-bar" onSubmit={handleCreatePreset}>
+              <input
+                type="text"
+                className="tbl-input"
+                placeholder="Nuevo grupo (ej. Gafas Polarizadas, Pijamas...)"
+                value={newPresetName}
+                onChange={(e) => setNewPresetName(e.target.value)}
+                required
+              />
+              <select
+                className="tbl-select"
+                value={newPresetDept}
+                onChange={(e) => setNewPresetDept(e.target.value as Department)}
+              >
+                {(Object.keys(DEPARTMENT_LABELS) as Department[]).map((k) => (
+                  <option key={k} value={k}>
+                    {DEPARTMENT_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="tbl-select"
+                value={newPresetCurr}
+                onChange={(e) => setNewPresetCurr(e.target.value as Currency)}
+              >
+                <option value="USD">USD</option>
+                <option value="CUP">CUP</option>
+              </select>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                className="tbl-input"
+                placeholder="Precio"
+                value={newPresetPrice}
+                onChange={(e) => setNewPresetPrice(e.target.value)}
+                required
+              />
+              <button type="submit" className="btn btn--primary btn--sm" disabled={creatingPreset}>
+                <Plus size={15} /> {creatingPreset ? 'Creando...' : 'Crear grupo'}
+              </button>
+            </form>
+
+            <div className="admin-toolbar__filters" style={{ marginBottom: 14 }}>
+              <button
+                type="button"
+                className={`chip${presetDeptFilter === 'all' ? ' is-active' : ''}`}
+                onClick={() => setPresetDeptFilter('all')}
+              >
+                Todos ({pricePresets.length})
+              </button>
+              {(Object.keys(DEPARTMENT_LABELS) as Department[]).map((dep) => (
+                <button
+                  key={dep}
+                  type="button"
+                  className={`chip${presetDeptFilter === dep ? ' is-active' : ''}`}
+                  onClick={() => setPresetDeptFilter(dep)}
+                >
+                  {DEPARTMENT_LABELS[dep]}
+                </button>
+              ))}
+            </div>
+
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nombre del grupo</th>
+                    <th>Departamento</th>
+                    <th>Moneda</th>
+                    <th>Precio del grupo</th>
+                    <th>Productos vinculados</th>
+                    <th>Acciones automáticas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPresets.map((pr) => {
+                    const d = presetDrafts[pr.id] || makePresetDraft(pr);
+                    const linkedCount = presetCounts[pr.id] || 0;
+                    const updatePrDraft = (patch: Partial<PresetDraft>) =>
+                      setPresetDrafts((prev) => ({
+                        ...prev,
+                        [pr.id]: { ...d, ...patch, dirty: true },
+                      }));
+                    return (
+                      <tr key={pr.id} className={d.dirty ? 'is-dirty' : ''}>
+                        <td>
+                          <input
+                            type="text"
+                            className="tbl-input tbl-input--title"
+                            value={d.name}
+                            onChange={(e) => updatePrDraft({ name: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="tbl-select"
+                            value={d.department}
+                            onChange={(e) =>
+                              updatePrDraft({ department: e.target.value as Department })
+                            }
+                          >
+                            {(Object.keys(DEPARTMENT_LABELS) as Department[]).map((k) => (
+                              <option key={k} value={k}>
+                                {DEPARTMENT_LABELS[k]}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            className="tbl-select tbl-select--curr"
+                            value={d.currency}
+                            onChange={(e) =>
+                              updatePrDraft({ currency: e.target.value as Currency })
+                            }
+                          >
+                            <option value="USD">USD</option>
+                            <option value="CUP">CUP</option>
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            className="tbl-input tbl-input--num"
+                            value={d.priceStr}
+                            onChange={(e) => updatePrDraft({ priceStr: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-outline"
+                            onClick={() => {
+                              setQuickFilter('all');
+                              setPresetFilter(pr.id);
+                              setTab('products');
+                            }}
+                          >
+                            Ver {linkedCount} productos
+                          </button>
+                        </td>
+                        <td>
+                          <div className="tbl-actions">
+                            <button
+                              type="button"
+                              className={`btn-save${d.dirty ? ' is-ready' : ''}`}
+                              disabled={savingPresetId === pr.id}
+                              onClick={() => handleSaveAndApplyPreset(pr)}
+                            >
+                              <Zap size={14} />
+                              <span>
+                                {savingPresetId === pr.id
+                                  ? 'Aplicando...'
+                                  : `Guardar y aplicar (${linkedCount})`}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-del-row"
+                              title="Eliminar grupo"
+                              onClick={() => handleDeletePreset(pr)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {tab === 'products' && (
           <section className="admin-panel">
@@ -599,7 +1254,7 @@ export function AdminView({
                 {(
                   [
                     ['all', `Todos (${kpis.total})`],
-                    ['unpriced', `Sin precio (${kpis.unpriced})`],
+                    ['unpriced', `Consultar (${kpis.unpriced})`],
                     ['calzado', 'Calzado'],
                     ['moda_shein', 'Moda Shein'],
                     ['hombre', 'Hombre'],
@@ -629,6 +1284,22 @@ export function AdminView({
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
+
+                <select
+                  className="tbl-select preset-filter-sel"
+                  aria-label="Filtrar por grupo de precio"
+                  value={presetFilter}
+                  onChange={(e) => setPresetFilter(e.target.value)}
+                >
+                  <option value="all">Todos los grupos de precio</option>
+                  <option value="none">Sin grupo asignado</option>
+                  {pricePresets.map((pr) => (
+                    <option key={pr.id} value={pr.id}>
+                      {formatPresetShort(pr)} ({presetCounts[pr.id] || 0})
+                    </option>
+                  ))}
+                </select>
+
                 <button type="button" className="btn-outline" onClick={handleExportCsv}>
                   <Download size={16} /> CSV
                 </button>
@@ -642,20 +1313,160 @@ export function AdminView({
               </div>
             </div>
 
-            <div className="rule-banner">
-              <Sparkles size={16} />
-              <span>
-                <strong>Regla automática Yole Shop (USD):</strong> escribe el <strong>Costo USD</strong> y el sistema calcula la venta automáticamente: menor a $20 → <strong>+${cfg.shein_under_20_markup}</strong> · $20+ par → <strong>+${cfg.shein_even_20_plus_markup}</strong> (ej. 28→30) · $20+ impar → <strong>+${cfg.shein_odd_20_plus_markup}</strong> (ej. 25→28).
-              </span>
+            <div className="admin-automation-strip">
+              <label className="chk-inline">
+                <input
+                  type="checkbox"
+                  checked={autoSaveOnPreset}
+                  onChange={(e) => setAutoSaveOnPreset(e.target.checked)}
+                />
+                <span>
+                  <strong>Auto-guardar al cambiar grupo</strong> en cualquier fila (un clic carga el precio y guarda directo en Supabase)
+                </span>
+              </label>
+
+              <div className="admin-automation-strip__right">
+                {dirtyProducts.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    disabled={savingAllDirty}
+                    onClick={handleSaveAllDirty}
+                  >
+                    <Save size={14} />{' '}
+                    {savingAllDirty
+                      ? 'Guardando...'
+                      : `Guardar ${dirtyProducts.length} cambios pendientes`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => setTab('presets')}
+                >
+                  <Layers size={14} /> Editar precios por grupo
+                </button>
+              </div>
             </div>
+
+            {selectedIds.length > 0 && (
+              <div className="bulk-bar" role="region" aria-label="Acciones masivas">
+                <div className="bulk-bar__head">
+                  <strong>{selectedIds.length} productos seleccionados</strong>
+                  <button
+                    type="button"
+                    className="btn-link"
+                    style={{ color: '#fff' }}
+                    onClick={() => setSelectedIds([])}
+                  >
+                    Limpiar selección
+                  </button>
+                </div>
+
+                <div className="bulk-bar__controls">
+                  <div className="bulk-group">
+                    <span>Cargar grupo de precio:</span>
+                    <select
+                      value={bulkPresetId}
+                      onChange={(e) => setBulkPresetId(e.target.value)}
+                    >
+                      {pricePresets.map((pr) => (
+                        <option key={pr.id} value={pr.id}>
+                          {formatPresetShort(pr)}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn--sm bulk-btn-white"
+                      disabled={bulkBusy || !bulkPresetId}
+                      onClick={handleBulkApplyPreset}
+                    >
+                      <Zap size={14} /> Aplicar grupo
+                    </button>
+                  </div>
+
+                  <div className="bulk-group">
+                    <span>Precio manual:</span>
+                    <select
+                      value={bulkPriceMode}
+                      onChange={(e) => setBulkPriceMode(e.target.value as 'set' | 'add' | 'sub')}
+                    >
+                      <option value="set">Fijar en</option>
+                      <option value="add">Sumar (+)</option>
+                      <option value="sub">Restar (-)</option>
+                    </select>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="Monto"
+                      value={bulkPriceVal}
+                      onChange={(e) => setBulkPriceVal(e.target.value)}
+                    />
+                    <select
+                      value={bulkCurrency}
+                      onChange={(e) => setBulkCurrency(e.target.value as Currency)}
+                    >
+                      <option value="USD">USD</option>
+                      <option value="CUP">CUP</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn--sm bulk-btn-white"
+                      disabled={bulkBusy}
+                      onClick={handleBulkApplyManualPrice}
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+
+                  <div className="bulk-group">
+                    <button
+                      type="button"
+                      className="btn btn--sm bulk-btn-ghost"
+                      disabled={bulkBusy}
+                      onClick={() => handleBulkStatusOrConsult('active')}
+                    >
+                      Activos
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--sm bulk-btn-ghost"
+                      disabled={bulkBusy}
+                      onClick={() => handleBulkStatusOrConsult('sold_out')}
+                    >
+                      Agotados
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--sm bulk-btn-ghost"
+                      disabled={bulkBusy}
+                      onClick={() => handleBulkStatusOrConsult('consult')}
+                    >
+                      Pasar a Consultar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead>
                   <tr>
+                    <th style={{ width: 34 }}>
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        title="Seleccionar todos los visibles"
+                        aria-label="Seleccionar todos los productos visibles"
+                      />
+                    </th>
                     <th>Foto / SKU</th>
                     <th>Producto y Categoría</th>
-                    <th>Costo USD (auto +2/+3)</th>
+                    <th>Grupo de Precio (1 clic)</th>
                     <th>Precio Venta</th>
                     <th>Tallas</th>
                     <th>Estado</th>
@@ -665,13 +1476,22 @@ export function AdminView({
                 <tbody>
                   {filteredProducts.map((p) => {
                     const d = drafts[p.id] || makeDraft(p);
+                    const checked = selectedIds.includes(p.id);
                     const costNum = parseFloat(d.costStr);
                     const previewMarkup =
                       Number.isFinite(costNum) && costNum > 0
                         ? calcYoleSheinPrice(costNum, cfg) - costNum
                         : null;
                     return (
-                      <tr key={p.id} className={d.dirty ? 'is-dirty' : ''}>
+                      <tr key={p.id} className={`${d.dirty ? 'is-dirty' : ''} ${checked ? 'is-selected' : ''}`}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleSelectRow(p.id)}
+                            aria-label={`Seleccionar ${p.sku}`}
+                          />
+                        </td>
                         <td>
                           <div className="tbl-photo-cell">
                             <img src={p.image_url} alt={p.sku} loading="lazy" />
@@ -730,23 +1550,38 @@ export function AdminView({
                           </div>
                         </td>
                         <td>
-                          <div className="tbl-cost-box">
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              className="tbl-input tbl-input--num"
-                              placeholder="Costo $"
-                              value={d.costStr}
-                              onChange={(e) =>
-                                updateDraft(p.id, { costStr: e.target.value }, true)
-                              }
-                            />
-                            {previewMarkup !== null && (
-                              <small className="markup-hint">
-                                +${previewMarkup} USD automático
-                              </small>
-                            )}
+                          <div className="tbl-stack">
+                            <select
+                              className="tbl-select"
+                              aria-label={`Grupo de precio para ${p.sku}`}
+                              value={d.price_preset_id}
+                              onChange={(e) => handleRowPresetChange(p, e.target.value)}
+                            >
+                              <option value="">— Sin grupo (manual) —</option>
+                              {pricePresets.map((pr) => (
+                                <option key={pr.id} value={pr.id}>
+                                  {formatPresetShort(pr)}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="tbl-cost-box">
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                className="tbl-input"
+                                placeholder="Costo USD (+2/+3)"
+                                value={d.costStr}
+                                onChange={(e) =>
+                                  updateDraft(p.id, { costStr: e.target.value }, true)
+                                }
+                              />
+                              {previewMarkup !== null && (
+                                <small className="markup-hint">
+                                  +${previewMarkup} USD auto
+                                </small>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td>
@@ -955,7 +1790,7 @@ export function AdminView({
                   type="number"
                   value={cfg.usd_to_cup_rate}
                   onChange={(e) =>
-                    setCfg({ ...cfg, usd_to_cup_rate: Number(e.target.value) || 920 })
+                    setCfg({ ...cfg, usd_to_cup_rate: Number(e.target.value) || 980 })
                   }
                 />
               </label>
@@ -1106,11 +1941,27 @@ export function AdminView({
                 {newPreviewInfo && <small className="markup-hint">{newPreviewInfo}</small>}
               </label>
               <label className="field field--full">
+                <span>
+                  <Sparkles size={13} style={{ verticalAlign: 'middle' }} /> Grupo de precio (carga rápida opcional)
+                </span>
+                <select
+                  value={newPresetId}
+                  onChange={(e) => handleSelectNewProductPreset(e.target.value)}
+                >
+                  <option value="">— Precio manual —</option>
+                  {pricePresets.map((pr) => (
+                    <option key={pr.id} value={pr.id}>
+                      {formatPresetShort(pr)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field field--full">
                 <span>Nombre del producto *</span>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Vestido Satén Vino Encaje"
+                  placeholder="Ej. Gafas Sol Negras / Sandalia Hermès"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                 />
@@ -1171,7 +2022,7 @@ export function AdminView({
                 </select>
               </label>
               <label className="field">
-                <span>Costo USD (calcula +2/+3)</span>
+                <span>Costo USD (opcional, calcula +2/+3)</span>
                 <input
                   type="number"
                   step="0.5"

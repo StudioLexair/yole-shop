@@ -77,7 +77,7 @@ describe('Yole Shop App', () => {
     expect(screen.getByText('Vestido Corto Satén Chocolate')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'USD' }));
-    expect(screen.getByText('$38.04 USD')).toBeInTheDocument();
+    expect(screen.getByText('$35.71 USD')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
     const modal = screen.getByRole('dialog');
