@@ -24,6 +24,7 @@ const mockProducts: Product[] = [
     cost_price: 35000,
     price: 35000,
     sizes: ['36', '38'],
+    sold_out_sizes: ['36'],
     fit_note: '',
     image_url: 'https://example.com/nb.webp',
     image_path: 'catalog/YOL-003.webp',
@@ -167,5 +168,35 @@ describe('Yole Shop App', () => {
     await waitFor(() => {
       expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
     });
+  });
+
+  it('soporta favoritos, tallas agotadas por separado y botones compartir/descargar en ficha', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+    });
+
+    // Guardar en favoritos y filtrar por favoritos
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Guardar Cartera Dior Beige & Negra en favoritos/i,
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Favoritos \(1\)/i }));
+    expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
+    expect(screen.queryByText('New Balance 9060 Blanco & Rosa')).not.toBeInTheDocument();
+
+    // Quitar filtro favoritos y abrir modal con botones Compartir y Descargar foto
+    fireEvent.click(screen.getByRole('button', { name: /Favoritos \(1\)/i }));
+    fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
+    const modal = screen.getByRole('dialog');
+    expect(within(modal).getByRole('button', { name: '36' })).toBeDisabled();
+    expect(within(modal).getByRole('button', { name: /Compartir/i })).toBeInTheDocument();
+    expect(within(modal).getByRole('button', { name: /Descargar foto/i })).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('button', { name: 'Cerrar' }));
+
+    // Al cerrar, aparece la franja Vistos recientemente
+    expect(screen.getByLabelText('Vistos recientemente')).toBeInTheDocument();
   });
 });

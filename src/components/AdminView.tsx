@@ -5,6 +5,7 @@ import {
   Check,
   Copy,
   Download,
+  ImageDown,
   ImagePlus,
   Layers,
   Lock,
@@ -35,14 +36,19 @@ import type {
 } from '../types';
 import { DEPARTMENT_LABELS } from '../types';
 import {
+  buildWhatsAppUrl,
   calcYoleSheinPrice,
   formatCup,
-  buildWhatsAppUrl,
   formatUsd,
   formatWhatsAppOrderText,
   normalizeWhatsAppDigits,
+  resolveProductImageUrl,
 } from '../lib/pricing';
 import { formatKb, optimizeImageToWebP } from '../lib/imageOptimizer';
+import {
+  downloadRemoteImage,
+  generateWhatsAppStatusCard,
+} from '../lib/mediaHelpers';
 import {
   applyPresetToLinkedProducts,
   bulkUpdateProducts,
@@ -85,6 +91,8 @@ interface RowDraft {
   priceStr: string;
   currency: Currency;
   sizesStr: string;
+  soldOutSizes: string[];
+  extraImages: string[];
   fit_note: string;
   status: ProductStatus;
   featured: boolean;
@@ -110,6 +118,8 @@ function makeDraft(p: Product): RowDraft {
     priceStr: p.price !== null ? String(p.price) : '',
     currency: p.currency,
     sizesStr: p.sizes.join(', '),
+    soldOutSizes: Array.isArray(p.sold_out_sizes) ? p.sold_out_sizes : [],
+    extraImages: Array.isArray(p.extra_images) ? p.extra_images : [],
     fit_note: p.fit_note,
     status: p.status,
     featured: p.featured,
@@ -157,6 +167,7 @@ export function AdminView({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savingAllDirty, setSavingAllDirty] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [cardBusyId, setCardBusyId] = useState<string | null>(null);
   const [autoSaveOnPreset, setAutoSaveOnPreset] = useState(true);
   const [toast, setToast] = useState('');
 
@@ -468,9 +479,11 @@ export function AdminView({
         cost_price: Number.isFinite(costNum as number) ? costNum : null,
         price: Number.isFinite(priceNum as number) ? priceNum : null,
         sizes: sizesArr,
+        sold_out_sizes: d.soldOutSizes.filter((s) => sizesArr.includes(s)),
         fit_note: d.fit_note.trim(),
         image_url: p.image_url,
         image_path: p.image_path,
+        extra_images: d.extraImages,
         status: d.status,
         featured: d.featured,
         source_group: p.source_group,
@@ -511,9 +524,11 @@ export function AdminView({
           cost_price: Number.isFinite(costNum as number) ? costNum : null,
           price: Number.isFinite(priceNum as number) ? priceNum : null,
           sizes: sizesArr,
+          sold_out_sizes: d.soldOutSizes.filter((s) => sizesArr.includes(s)),
           fit_note: d.fit_note.trim(),
           image_url: p.image_url,
           image_path: p.image_path,
+          extra_images: d.extraImages,
           status: d.status,
           featured: d.featured,
           source_group: p.source_group,
@@ -719,6 +734,76 @@ export function AdminView({
     }
   };
 
+  const handleRowExtraImagesUpload = async (p: Product, fileList: FileList) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    setUploadingId(p.id);
+    try {
+      const uploadedUrls: string[] = [];
+      for (const f of files) {
+        const opt = await optimizeImageToWebP(f);
+        const { imageUrl } = await uploadProductWebP(`${p.sku}-extra`, opt.blob);
+        uploadedUrls.push(imageUrl);
+      }
+      const nextExtras = [...(p.extra_images || []), ...uploadedUrls];
+      await saveProduct({
+        ...p,
+        extra_images: nextExtras,
+      });
+      await onRefresh();
+      showToast(`${uploadedUrls.length} foto(s) extra agregadas a ${p.sku}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudieron subir las fotos');
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  const handleRemoveExtraImage = async (p: Product, targetUrl: string) => {
+    const d = drafts[p.id] || makeDraft(p);
+    const nextExtras = d.extraImages.filter((u) => u !== targetUrl);
+    updateDraft(p.id, { extraImages: nextExtras });
+    try {
+      await saveProduct({
+        ...p,
+        extra_images: nextExtras,
+      });
+      await onRefresh();
+      showToast(`Foto extra quitada de ${p.sku}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo quitar la foto');
+    }
+  };
+
+  const toggleRowSoldOutSize = (p: Product, sz: string) => {
+    const d = drafts[p.id] || makeDraft(p);
+    const exists = d.soldOutSizes.includes(sz);
+    const next = exists
+      ? d.soldOutSizes.filter((s) => s !== sz)
+      : [...d.soldOutSizes, sz];
+    updateDraft(p.id, { soldOutSizes: next });
+  };
+
+  const handleDownloadStatusCard = async (p: Product) => {
+    setCardBusyId(p.id);
+    try {
+      const blob = await generateWhatsAppStatusCard(p, cfg);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `YoleShop-${p.sku}-estado.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      showToast(`Tarjeta Estado WhatsApp generada (${p.sku})`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo generar la tarjeta');
+    } finally {
+      setCardBusyId(null);
+    }
+  };
+
   const handleDeleteRow = async (p: Product) => {
     if (!window.confirm(`¿Eliminar definitivamente [${p.sku}] ${p.title}?`)) return;
     try {
@@ -890,11 +975,86 @@ export function AdminView({
       p.status,
       p.image_url,
     ]);
-    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csv = '\uFEFF' + [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `yole-shop-catalogo-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  };
+
+  const orderMetrics = useMemo(() => {
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
+    let nuevo = 0;
+    let confirmado = 0;
+    let entregado = 0;
+    let cancelado = 0;
+    let monthTotalCup = 0;
+
+    for (const o of orders) {
+      if (o.status === 'nuevo') nuevo += 1;
+      else if (o.status === 'confirmado') confirmado += 1;
+      else if (o.status === 'entregado') entregado += 1;
+      else if (o.status === 'cancelado') cancelado += 1;
+
+      const d = new Date(o.created_at);
+      if (
+        o.status !== 'cancelado' &&
+        d.getMonth() === curMonth &&
+        d.getFullYear() === curYear
+      ) {
+        monthTotalCup += Number(o.subtotal_cup) || 0;
+      }
+    }
+
+    const rate = cfg.usd_to_cup_rate > 0 ? cfg.usd_to_cup_rate : 980;
+    const monthTotalUsd = Math.round((monthTotalCup / rate) * 100) / 100;
+    return { nuevo, confirmado, entregado, cancelado, monthTotalCup, monthTotalUsd };
+  }, [orders, cfg.usd_to_cup_rate]);
+
+  const handleExportOrdersCsv = () => {
+    const header = [
+      'Codigo',
+      'Fecha',
+      'Cliente',
+      'Telefono',
+      'Entrega',
+      'Direccion',
+      'Pago',
+      'Estado',
+      'Articulos',
+      'Subtotal_CUP',
+      'Subtotal_USD',
+      'Domicilio_CUP',
+      'Nota',
+    ];
+    const rows = orders.map((o) => {
+      const itemsSummary = o.items
+        .map((it) => `${it.qty}x ${it.sku} ${it.title} (${it.size})`)
+        .join(' | ');
+      return [
+        o.order_code,
+        `"${new Date(o.created_at).toLocaleString('es-ES')}"`,
+        `"${o.customer_name.replace(/"/g, '""')}"`,
+        `"${(o.customer_phone || '').replace(/"/g, '""')}"`,
+        o.delivery_type,
+        `"${(o.delivery_address || '').replace(/"/g, '""')}"`,
+        o.payment_method,
+        o.status,
+        `"${itemsSummary.replace(/"/g, '""')}"`,
+        o.subtotal_cup,
+        o.subtotal_usd,
+        o.delivery_fee_cup,
+        `"${(o.notes || '').replace(/"/g, '""')}"`,
+      ];
+    });
+    const csv = '\uFEFF' + [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `yole-shop-pedidos-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
   };
 
@@ -1513,21 +1673,55 @@ export function AdminView({
                         <td data-label="Foto / SKU">
                           <div className="tbl-photo-cell">
                             <img src={p.image_url} alt={p.sku} loading="lazy" />
-                            <div>
+                            <div className="tbl-photo-meta">
                               <strong>{p.sku}</strong>
-                              <label className="upload-mini-btn">
-                                <ImagePlus size={13} />
-                                <span>{uploadingId === p.id ? 'Subiendo...' : 'Foto WebP'}</span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  hidden
-                                  onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    if (f) handleRowImageUpload(p, f);
-                                  }}
-                                />
-                              </label>
+                              <div className="tbl-photo-btns">
+                                <label className="upload-mini-btn">
+                                  <ImagePlus size={13} />
+                                  <span>{uploadingId === p.id ? 'Subiendo...' : 'Foto WebP'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    hidden
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleRowImageUpload(p, f);
+                                    }}
+                                  />
+                                </label>
+                                <label className="upload-mini-btn" title="Agregar 2da o 3ra foto al producto">
+                                  <Plus size={12} />
+                                  <span>Foto extra</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    hidden
+                                    onChange={(e) => {
+                                      if (e.target.files?.length) {
+                                        handleRowExtraImagesUpload(p, e.target.files);
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                              {d.extraImages.length > 0 && (
+                                <div className="tbl-extra-thumbs">
+                                  {d.extraImages.map((exUrl) => (
+                                    <span key={exUrl} className="tbl-extra-thumb">
+                                      <img src={exUrl} alt="Vista extra" />
+                                      <button
+                                        type="button"
+                                        title="Quitar foto extra"
+                                        aria-label="Quitar foto extra"
+                                        onClick={() => handleRemoveExtraImage(p, exUrl)}
+                                      >
+                                        <X size={10} />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1634,6 +1828,35 @@ export function AdminView({
                               value={d.sizesStr}
                               onChange={(e) => updateDraft(p.id, { sizesStr: e.target.value })}
                             />
+                            {d.sizesStr
+                              .split(',')
+                              .map((s) => s.trim())
+                              .filter(Boolean).length > 0 && (
+                              <div className="tbl-size-toggles" title="Toca una talla para marcarla como agotada">
+                                {d.sizesStr
+                                  .split(',')
+                                  .map((s) => s.trim())
+                                  .filter(Boolean)
+                                  .map((sz) => {
+                                    const isOut = d.soldOutSizes.includes(sz);
+                                    return (
+                                      <button
+                                        key={sz}
+                                        type="button"
+                                        className={`size-stock-pill${isOut ? ' is-out' : ''}`}
+                                        onClick={() => toggleRowSoldOutSize(p, sz)}
+                                        title={
+                                          isOut
+                                            ? `Talla ${sz} agotada (clic para reactivar)`
+                                            : `Talla ${sz} disponible (clic para agotar)`
+                                        }
+                                      >
+                                        {isOut ? `✕ ${sz}` : sz}
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                            )}
                             <input
                               type="text"
                               className="tbl-input"
@@ -1681,6 +1904,15 @@ export function AdminView({
                             </button>
                             <button
                               type="button"
+                              className="btn-card-wa"
+                              disabled={cardBusyId === p.id}
+                              title="Descargar tarjeta para Estado de WhatsApp"
+                              onClick={() => handleDownloadStatusCard(p)}
+                            >
+                              <ImageDown size={14} />
+                            </button>
+                            <button
+                              type="button"
                               className="btn-del-row"
                               title="Eliminar producto"
                               onClick={() => handleDeleteRow(p)}
@@ -1702,10 +1934,39 @@ export function AdminView({
           <section className="admin-panel">
             <div className="admin-panel-head">
               <h2>Pedidos enviados a WhatsApp</h2>
-              <button type="button" className="btn-outline" onClick={loadOrders}>
-                <RefreshCw size={15} /> Actualizar
-              </button>
+              <div className="admin-panel-head__btns">
+                {orders.length > 0 && (
+                  <button type="button" className="btn-outline" onClick={handleExportOrdersCsv}>
+                    <Download size={15} /> Exportar CSV
+                  </button>
+                )}
+                <button type="button" className="btn-outline" onClick={loadOrders}>
+                  <RefreshCw size={15} /> Actualizar
+                </button>
+              </div>
             </div>
+
+            {orders.length > 0 && (
+              <div className="orders-summary-grid">
+                <div className="kpi-card">
+                  <span>Nuevos</span>
+                  <strong>{orderMetrics.nuevo}</strong>
+                </div>
+                <div className="kpi-card">
+                  <span>Confirmados</span>
+                  <strong>{orderMetrics.confirmado}</strong>
+                </div>
+                <div className="kpi-card">
+                  <span>Entregados</span>
+                  <strong>{orderMetrics.entregado}</strong>
+                </div>
+                <div className="kpi-card kpi-card--accent">
+                  <span>Vendido este mes</span>
+                  <strong>{formatCup(orderMetrics.monthTotalCup)}</strong>
+                  <small>≈ {formatUsd(orderMetrics.monthTotalUsd)}</small>
+                </div>
+              </div>
+            )}
             {ordersLoading ? (
               <p className="muted-empty">Cargando pedidos...</p>
             ) : orders.length === 0 ? (
@@ -1738,20 +1999,22 @@ export function AdminView({
                     <ul className="order-items">
                       {ord.items.map((it, idx) => {
                         const matched = products.find((p) => p.sku === it.sku);
+                        const itemPhoto = resolveProductImageUrl(
+                          it.sku,
+                          it.image_url || matched?.image_url
+                        );
                         return (
                           <li key={idx} className="order-item-row">
-                            {matched?.image_url && (
-                              <a
-                                href={matched.image_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title={`Ver foto de ${it.sku}`}
-                                className="order-item-thumb"
-                              >
-                                <img src={matched.image_url} alt={it.title} />
-                              </a>
-                            )}
-                            <span>
+                            <a
+                              href={itemPhoto}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Ver foto de ${it.sku}`}
+                              className="order-item-thumb"
+                            >
+                              <img src={itemPhoto} alt={it.title} />
+                            </a>
+                            <span className="order-item-text">
                               {it.qty}x [{it.sku}] {it.title} (Talla {it.size}) —{' '}
                               {it.unit_price !== null
                                 ? it.currency === 'USD'
@@ -1759,6 +2022,14 @@ export function AdminView({
                                   : formatCup(it.unit_price * it.qty)
                                 : 'Por confirmar'}
                             </span>
+                            <button
+                              type="button"
+                              className="order-item-dl"
+                              title={`Descargar foto ${it.sku}`}
+                              onClick={() => downloadRemoteImage(itemPhoto, `${it.sku}.webp`)}
+                            >
+                              <Download size={13} />
+                            </button>
                           </li>
                         );
                       })}
@@ -1781,6 +2052,11 @@ export function AdminView({
                               ord.payment_method === 'transferencia'
                                 ? Math.round((ord.subtotal_cup * settings.transfer_surcharge_pct) / 100)
                                 : 0;
+                            const enrichedItems = ord.items.map((it) => ({
+                              ...it,
+                              image_url:
+                                it.image_url || products.find((p) => p.sku === it.sku)?.image_url,
+                            }));
                             const txt = formatWhatsAppOrderText({
                               orderCode: ord.order_code,
                               customerName: ord.customer_name,
@@ -1789,7 +2065,7 @@ export function AdminView({
                               deliveryAddress: ord.delivery_address,
                               paymentMethod: ord.payment_method,
                               notes: ord.notes,
-                              items: ord.items,
+                              items: enrichedItems,
                               summary: {
                                 subtotalCup: ord.subtotal_cup,
                                 subtotalUsd: ord.subtotal_usd,
@@ -1823,7 +2099,11 @@ export function AdminView({
                               deliveryAddress: ord.delivery_address,
                               paymentMethod: ord.payment_method,
                               notes: ord.notes,
-                              items: ord.items,
+                              items: ord.items.map((it) => ({
+                                ...it,
+                                image_url:
+                                  it.image_url || products.find((p) => p.sku === it.sku)?.image_url,
+                              })),
                               summary: {
                                 subtotalCup: ord.subtotal_cup,
                                 subtotalUsd: ord.subtotal_usd,

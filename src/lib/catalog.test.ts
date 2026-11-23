@@ -3,8 +3,14 @@ import {
   filterProducts,
   collectAvailableSizes,
   makePresetSlug,
+  pushRecentSku,
   readCachedStoreData,
+  readCustomerProfile,
+  readFavoriteSkus,
+  readRecentSkus,
   writeCachedStoreData,
+  writeCustomerProfile,
+  writeFavoriteSkus,
 } from './catalog';
 import { DEFAULT_SETTINGS, type Product } from '../types';
 
@@ -175,5 +181,66 @@ describe('offline-first catalog cache', () => {
     const restored = readCachedStoreData();
     expect(restored?.products).toHaveLength(3);
     expect(restored?.categories[0]?.name).toBe('Accesorios');
+  });
+
+  it('normaliza tildes en búsqueda y respeta tallas agotadas individuales', () => {
+    const pantalon: Product = {
+      ...items[1],
+      id: 'e',
+      sku: 'YOL-210',
+      title: 'Pantalón Mezclilla Clásico',
+      sizes: ['30', '32', '34'],
+      sold_out_sizes: ['32'],
+    };
+    const found = filterProducts(
+      [pantalon],
+      {
+        department: 'all',
+        categoryId: 'all',
+        size: 'all',
+        search: 'pantalon clasico',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980
+    );
+    expect(found.map((p) => p.sku)).toEqual(['YOL-210']);
+
+    const bySoldOutSize = filterProducts(
+      [pantalon],
+      {
+        department: 'all',
+        categoryId: 'all',
+        size: '32',
+        search: '',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980
+    );
+    expect(bySoldOutSize).toHaveLength(0);
+    expect(collectAvailableSizes([pantalon])).toEqual(['30', '34']);
+  });
+
+  it('persiste favoritos, vistos recientemente y datos del cliente en localStorage', () => {
+    writeFavoriteSkus(['YOL-001', 'YOL-120']);
+    expect(readFavoriteSkus()).toEqual(['YOL-001', 'YOL-120']);
+
+    pushRecentSku('YOL-001');
+    pushRecentSku('YOL-120');
+    pushRecentSku('YOL-001');
+    expect(readRecentSkus()).toEqual(['YOL-001', 'YOL-120']);
+
+    writeCustomerProfile({
+      customerName: 'Laura',
+      customerPhone: '+5352678747',
+      deliveryType: 'domicilio',
+      deliveryAddress: 'Reparto Escambray',
+      paymentMethod: 'efectivo',
+      deliveryTime: '3pm',
+    });
+    expect(readCustomerProfile()?.customerName).toBe('Laura');
   });
 });

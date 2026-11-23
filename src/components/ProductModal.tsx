@@ -1,12 +1,26 @@
-import { useState } from 'react';
-import { Check, MessageCircle, ShoppingBag, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Heart,
+  MessageCircle,
+  Share2,
+  ShoppingBag,
+  X,
+} from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
 import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
+import { getAvailableSizes } from '../lib/catalog';
+import { downloadRemoteImage, shareProductLink } from '../lib/mediaHelpers';
 
 interface ProductModalProps {
   product: Product;
   displayCurrency: Currency;
   settings: StoreSettings;
+  isFavorite?: boolean;
+  onToggleFavorite?: (sku: string) => void;
   onClose: () => void;
   onAddToCart: (product: Product, size: string) => void;
 }
@@ -15,34 +29,126 @@ export function ProductModal({
   product,
   displayCurrency,
   settings,
+  isFavorite = false,
+  onToggleFavorite,
   onClose,
   onAddToCart,
 }: ProductModalProps) {
-  const availableSizes = product.sizes.length > 0 ? product.sizes : ['Única'];
-  const [selectedSize, setSelectedSize] = useState(availableSizes[0]);
+  const allSizes = product.sizes.length > 0 ? product.sizes : ['Única'];
+  const soldOutSet = useMemo(
+    () => new Set(product.sold_out_sizes || []),
+    [product.sold_out_sizes]
+  );
+  const availableSizes = useMemo(() => getAvailableSizes(product), [product]);
+  const [selectedSize, setSelectedSize] = useState(
+    availableSizes[0] || allSizes[0] || 'Única'
+  );
   const [added, setAdded] = useState(false);
+  const [shareNote, setShareNote] = useState('');
+  const [downloading, setDownloading] = useState(false);
+
+  const gallery = useMemo(
+    () =>
+      [product.image_url, ...(product.extra_images || [])].filter(
+        (u, idx, arr) => Boolean(u) && arr.indexOf(u) === idx
+      ),
+    [product.image_url, product.extra_images]
+  );
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const activePhoto = gallery[photoIdx] || product.image_url;
 
   const priceInfo = getDisplayPrice(product, displayCurrency, settings.usd_to_cup_rate);
   const waUrl = buildWhatsAppProductLink(product, selectedSize, settings);
-  const isSoldOut = product.status === 'sold_out';
+  const noSizesAvailable = product.sizes.length > 0 && availableSizes.length === 0;
+  const isSoldOut = product.status === 'sold_out' || noSizesAvailable;
 
   const handleAdd = () => {
-    if (isSoldOut) return;
+    if (isSoldOut || soldOutSet.has(selectedSize)) return;
     onAddToCart(product, selectedSize);
     setAdded(true);
     setTimeout(() => setAdded(false), 1400);
   };
 
+  const handleShare = async () => {
+    const res = await shareProductLink(product);
+    if (res === 'copied') {
+      setShareNote('Enlace copiado');
+      setTimeout(() => setShareNote(''), 2000);
+    } else if (res === 'shared') {
+      setShareNote('Compartido');
+      setTimeout(() => setShareNote(''), 1800);
+    }
+  };
+
+  const handleDownloadPhoto = async () => {
+    setDownloading(true);
+    try {
+      const suffix = photoIdx > 0 ? `-${photoIdx + 1}` : '';
+      await downloadRemoteImage(activePhoto, `${product.sku}${suffix}.webp`);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={product.title} onClick={onClose}>
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label={product.title}
+      onClick={onClose}
+    >
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Cerrar">
           <X size={20} />
         </button>
 
         <div className="modal-grid">
-          <div className="modal-media">
-            <img src={product.image_url} alt={product.title} />
+          <div className="modal-media-wrap">
+            <div className="modal-media">
+              <img src={activePhoto} alt={product.title} />
+              {gallery.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="modal-gal-arrow is-prev"
+                    aria-label="Foto anterior"
+                    onClick={() =>
+                      setPhotoIdx((i) => (i - 1 + gallery.length) % gallery.length)
+                    }
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="modal-gal-arrow is-next"
+                    aria-label="Siguiente foto"
+                    onClick={() => setPhotoIdx((i) => (i + 1) % gallery.length)}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <span className="modal-gal-count">
+                    {photoIdx + 1}/{gallery.length}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {gallery.length > 1 && (
+              <div className="modal-thumbs" role="tablist" aria-label="Galería de fotos">
+                {gallery.map((url, idx) => (
+                  <button
+                    key={url}
+                    type="button"
+                    className={`modal-thumb${idx === photoIdx ? ' is-active' : ''}`}
+                    onClick={() => setPhotoIdx(idx)}
+                    aria-label={`Ver foto ${idx + 1}`}
+                  >
+                    <img src={url} alt={`${product.title} vista ${idx + 1}`} />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="modal-info">
@@ -73,20 +179,31 @@ export function ProductModal({
 
             <div className="modal-sizes">
               <div className="modal-sizes__label">
-                <span>Selecciona talla disponible:</span>
-                <strong>{selectedSize}</strong>
+                <span>
+                  {noSizesAvailable
+                    ? 'Todas las tallas agotadas temporalmente'
+                    : 'Selecciona talla disponible:'}
+                </span>
+                <strong>{noSizesAvailable ? 'Agotado' : selectedSize}</strong>
               </div>
               <div className="modal-sizes__grid">
-                {availableSizes.map((sz) => (
-                  <button
-                    key={sz}
-                    type="button"
-                    className={`size-btn${selectedSize === sz ? ' is-active' : ''}`}
-                    onClick={() => setSelectedSize(sz)}
-                  >
-                    {sz}
-                  </button>
-                ))}
+                {allSizes.map((sz) => {
+                  const isSzOut = soldOutSet.has(sz);
+                  return (
+                    <button
+                      key={sz}
+                      type="button"
+                      disabled={isSzOut}
+                      title={isSzOut ? `Talla ${sz} agotada` : `Seleccionar talla ${sz}`}
+                      className={`size-btn${selectedSize === sz && !isSzOut ? ' is-active' : ''}${
+                        isSzOut ? ' is-sold-out-size' : ''
+                      }`}
+                      onClick={() => !isSzOut && setSelectedSize(sz)}
+                    >
+                      {sz}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -98,7 +215,13 @@ export function ProductModal({
                 onClick={handleAdd}
               >
                 {added ? <Check size={18} /> : <ShoppingBag size={18} />}
-                <span>{isSoldOut ? 'Producto agotado' : added ? 'Agregado al carrito' : 'Agregar al carrito'}</span>
+                <span>
+                  {isSoldOut
+                    ? 'Producto agotado'
+                    : added
+                      ? 'Agregado al carrito'
+                      : 'Agregar al carrito'}
+                </span>
               </button>
 
               <a
@@ -110,6 +233,32 @@ export function ProductModal({
                 <MessageCircle size={18} />
                 <span>Pedir por WhatsApp</span>
               </a>
+            </div>
+
+            <div className="modal-utility-row">
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  className={`btn-util${isFavorite ? ' is-fav' : ''}`}
+                  onClick={() => onToggleFavorite(product.sku)}
+                >
+                  <Heart size={15} fill={isFavorite ? 'currentColor' : 'none'} />
+                  <span>{isFavorite ? 'En favoritos' : 'Favorito'}</span>
+                </button>
+              )}
+              <button type="button" className="btn-util" onClick={handleShare}>
+                <Share2 size={15} />
+                <span>{shareNote || 'Compartir'}</span>
+              </button>
+              <button
+                type="button"
+                className="btn-util"
+                disabled={downloading}
+                onClick={handleDownloadPhoto}
+              >
+                <Download size={15} />
+                <span>{downloading ? 'Bajando...' : 'Descargar foto'}</span>
+              </button>
             </div>
 
             <p className="modal-policy">{settings.no_returns_notice}</p>

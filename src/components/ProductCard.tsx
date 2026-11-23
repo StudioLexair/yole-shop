@@ -1,11 +1,14 @@
-import { Eye, MessageCircle, ShoppingBag } from 'lucide-react';
+import { Eye, Heart, Images, MessageCircle, ShoppingBag } from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
 import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
+import { getAvailableSizes } from '../lib/catalog';
 
 interface ProductCardProps {
   product: Product;
   displayCurrency: Currency;
   settings: StoreSettings;
+  isFavorite?: boolean;
+  onToggleFavorite?: (sku: string) => void;
   onSelect: (product: Product) => void;
   onQuickAdd: (product: Product, size: string) => void;
 }
@@ -14,13 +17,19 @@ export function ProductCard({
   product,
   displayCurrency,
   settings,
+  isFavorite = false,
+  onToggleFavorite,
   onSelect,
   onQuickAdd,
 }: ProductCardProps) {
   const priceInfo = getDisplayPrice(product, displayCurrency, settings.usd_to_cup_rate);
-  const defaultSize = product.sizes[0] || 'Única';
+  const soldOutSet = new Set(product.sold_out_sizes || []);
+  const availableSizes = getAvailableSizes(product);
+  const defaultSize = availableSizes[0] || product.sizes[0] || 'Única';
   const waUrl = buildWhatsAppProductLink(product, defaultSize, settings);
-  const isSoldOut = product.status === 'sold_out';
+  const allSizesOut = product.sizes.length > 0 && availableSizes.length === 0;
+  const isSoldOut = product.status === 'sold_out' || allSizesOut;
+  const totalPhotos = 1 + (product.extra_images?.length || 0);
 
   return (
     <article className={`p-card${isSoldOut ? ' is-sold-out' : ''}`}>
@@ -48,8 +57,29 @@ export function ProductCard({
           {product.featured && !isSoldOut && (
             <span className="p-badge p-badge--feat">TOP</span>
           )}
+          {totalPhotos > 1 && (
+            <span className="p-badge p-badge--photos" title={`${totalPhotos} fotos disponibles`}>
+              <Images size={11} /> {totalPhotos}
+            </span>
+          )}
         </div>
         {isSoldOut && <span className="p-soldout-ribbon">Agotado</span>}
+
+        {onToggleFavorite && (
+          <button
+            type="button"
+            className={`p-card__fav${isFavorite ? ' is-fav' : ''}`}
+            aria-label={isFavorite ? `Quitar ${product.title} de favoritos` : `Guardar ${product.title} en favoritos`}
+            title={isFavorite ? 'En favoritos' : 'Guardar en favoritos'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(product.sku);
+            }}
+          >
+            <Heart size={15} fill={isFavorite ? 'currentColor' : 'none'} />
+          </button>
+        )}
+
         <button
           type="button"
           className="p-card__zoom"
@@ -75,11 +105,18 @@ export function ProductCard({
 
         {product.sizes.length > 0 && (
           <div className="p-card__sizes" aria-label="Tallas disponibles">
-            {product.sizes.slice(0, 5).map((sz) => (
-              <span key={sz} className="p-size-pill">
-                {sz}
-              </span>
-            ))}
+            {product.sizes.slice(0, 5).map((sz) => {
+              const szOut = soldOutSet.has(sz);
+              return (
+                <span
+                  key={sz}
+                  className={`p-size-pill${szOut ? ' is-sold-out-size' : ''}`}
+                  title={szOut ? `Talla ${sz} agotada` : `Talla ${sz} disponible`}
+                >
+                  {sz}
+                </span>
+              );
+            })}
             {product.sizes.length > 5 && (
               <span className="p-size-pill p-size-pill--more">
                 +{product.sizes.length - 5}
@@ -105,14 +142,14 @@ export function ProductCard({
               type="button"
               className="btn-icon-add"
               disabled={isSoldOut}
-              title={product.sizes.length > 1 ? 'Elegir talla' : 'Agregar al carrito'}
+              title={availableSizes.length > 1 ? 'Elegir talla' : 'Agregar al carrito'}
               onClick={() => {
-                if (product.sizes.length > 1) onSelect(product);
+                if (availableSizes.length > 1) onSelect(product);
                 else onQuickAdd(product, defaultSize);
               }}
             >
               <ShoppingBag size={15} />
-              <span>{product.sizes.length > 1 ? 'Talla' : 'Agregar'}</span>
+              <span>{availableSizes.length > 1 ? 'Talla' : 'Agregar'}</span>
             </button>
             <a
               href={waUrl}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MessageCircle, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
 import type {
   CartItem,
@@ -13,7 +13,12 @@ import {
   getDisplayPrice,
   summarizeCart,
 } from '../lib/pricing';
-import { submitPublicOrder } from '../lib/catalog';
+import {
+  clearCustomerProfile,
+  readCustomerProfile,
+  submitPublicOrder,
+  writeCustomerProfile,
+} from '../lib/catalog';
 
 interface CartDrawerProps {
   open: boolean;
@@ -34,16 +39,39 @@ export function CartDrawer({
   onRemove,
   onClear,
 }: CartDrawerProps) {
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [deliveryType, setDeliveryType] = useState<DeliveryType>('domicilio');
-  const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [deliveryTime, setDeliveryTime] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
+  const savedProfile = readCustomerProfile();
+  const [customerName, setCustomerName] = useState(savedProfile?.customerName || '');
+  const [customerPhone, setCustomerPhone] = useState(savedProfile?.customerPhone || '');
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>(
+    savedProfile?.deliveryType || 'domicilio'
+  );
+  const [deliveryAddress, setDeliveryAddress] = useState(savedProfile?.deliveryAddress || '');
+  const [deliveryTime, setDeliveryTime] = useState(savedProfile?.deliveryTime || '');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    savedProfile?.paymentMethod || 'efectivo'
+  );
   const [notes, setNotes] = useState('');
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [sentCode, setSentCode] = useState('');
+
+  useEffect(() => {
+    if (
+      customerName.trim() ||
+      customerPhone.trim() ||
+      deliveryAddress.trim() ||
+      deliveryTime.trim()
+    ) {
+      writeCustomerProfile({
+        customerName,
+        customerPhone,
+        deliveryType,
+        deliveryAddress,
+        paymentMethod,
+        deliveryTime,
+      });
+    }
+  }, [customerName, customerPhone, deliveryType, deliveryAddress, paymentMethod, deliveryTime]);
 
   if (!open) return null;
 
@@ -100,6 +128,7 @@ export function CartDrawer({
           qty: it.qty,
           currency: it.product.currency,
           unit_price: it.product.price,
+          image_url: it.product.image_url,
         })),
         subtotal_cup: summary.subtotalCup,
         subtotal_usd: summary.subtotalUsd,
@@ -216,6 +245,25 @@ export function CartDrawer({
                     </p>
                   )}
                 </div>
+
+                {(customerName || customerPhone || deliveryAddress || deliveryTime) && (
+                  <div className="checkout-saved-row">
+                    <span>Tus datos quedan guardados para próximos pedidos</span>
+                    <button
+                      type="button"
+                      className="btn-link"
+                      onClick={() => {
+                        clearCustomerProfile();
+                        setCustomerName('');
+                        setCustomerPhone('');
+                        setDeliveryAddress('');
+                        setDeliveryTime('');
+                      }}
+                    >
+                      Borrar datos
+                    </button>
+                  </div>
+                )}
 
                 <label className="field">
                   <span>Tu nombre *</span>

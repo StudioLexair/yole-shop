@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   ArrowRight,
   Download,
+  Heart,
   Lock,
   MapPin,
   Menu,
@@ -25,8 +26,12 @@ import {
   collectAvailableSizes,
   fetchStoreData,
   filterProducts,
+  pushRecentSku,
   readCachedStoreData,
+  readFavoriteSkus,
+  readRecentSkus,
   writeCachedStoreData,
+  writeFavoriteSkus,
   type DepartmentFilter,
   type SortMode,
 } from './lib/catalog';
@@ -90,6 +95,9 @@ export function App() {
   const [sizeFilter, setSizeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [onlyPriced, setOnlyPriced] = useState(false);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [favoriteSkus, setFavoriteSkus] = useState<string[]>(() => readFavoriteSkus());
+  const [recentSkus, setRecentSkus] = useState<string[]>(() => readRecentSkus());
   const [sort, setSort] = useState<SortMode>('featured');
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('CUP');
   const [visibleLimit, setVisibleLimit] = useState(PAGE_STEP);
@@ -280,33 +288,82 @@ export function App() {
     [deptScopedProducts]
   );
 
-  const filteredProducts = useMemo(
-    () =>
-      filterProducts(
-        products,
-        {
-          department: activeDeptFilter,
-          categoryId,
-          size: sizeFilter,
-          search,
-          onlyPriced,
-          includeSoldOut: settings.show_sold_out_public,
-          sort,
-        },
-        settings.usd_to_cup_rate
-      ),
-    [
+  const favoriteSet = useMemo(() => new Set(favoriteSkus), [favoriteSkus]);
+
+  const toggleFavoriteSku = useCallback((sku: string) => {
+    setFavoriteSkus((prev) => {
+      const next = prev.includes(sku) ? prev.filter((s) => s !== sku) : [sku, ...prev];
+      writeFavoriteSkus(next);
+      return next;
+    });
+  }, []);
+
+  const openProductModal = useCallback((product: Product) => {
+    setSelectedProduct(product);
+    setRecentSkus(pushRecentSku(product.sku));
+    if (typeof window !== 'undefined' && !isAdminPath()) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('sku', product.sku);
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    }
+  }, []);
+
+  const closeProductModal = useCallback(() => {
+    setSelectedProduct(null);
+    if (typeof window !== 'undefined' && !isAdminPath()) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('sku')) {
+        url.searchParams.delete('sku');
+        const nextUrl = url.searchParams.toString()
+          ? `${url.pathname}?${url.searchParams.toString()}`
+          : url.pathname;
+        window.history.replaceState({}, '', nextUrl);
+      }
+    }
+  }, []);
+
+  const recentProducts = useMemo(() => {
+    const bySku = new Map(products.map((p) => [p.sku, p]));
+    return recentSkus
+      .map((sku) => bySku.get(sku))
+      .filter(
+        (p): p is Product =>
+          Boolean(p) &&
+          p!.status !== 'hidden' &&
+          (settings.show_sold_out_public || p!.status !== 'sold_out')
+      )
+      .slice(0, 8);
+  }, [products, recentSkus, settings.show_sold_out_public]);
+
+  const filteredProducts = useMemo(() => {
+    const base = filterProducts(
       products,
-      activeDeptFilter,
-      categoryId,
-      sizeFilter,
-      search,
-      onlyPriced,
-      settings.show_sold_out_public,
-      sort,
-      settings.usd_to_cup_rate,
-    ]
-  );
+      {
+        department: activeDeptFilter,
+        categoryId,
+        size: sizeFilter,
+        search,
+        onlyPriced,
+        includeSoldOut: settings.show_sold_out_public,
+        sort,
+      },
+      settings.usd_to_cup_rate
+    );
+    if (!onlyFavorites) return base;
+    return base.filter((p) => favoriteSet.has(p.sku));
+  }, [
+    products,
+    activeDeptFilter,
+    categoryId,
+    sizeFilter,
+    search,
+    onlyPriced,
+    onlyFavorites,
+    favoriteSet,
+    settings.show_sold_out_public,
+    sort,
+    settings.usd_to_cup_rate,
+  ]);
 
   const visibleProducts = useMemo(
     () => filteredProducts.slice(0, visibleLimit),
@@ -318,6 +375,7 @@ export function App() {
     setSheinGender('all');
     setCategoryId('all');
     setSizeFilter('all');
+    setOnlyFavorites(false);
     setVisibleLimit(PAGE_STEP);
   };
 
@@ -633,6 +691,18 @@ export function App() {
           </div>
 
           <div className="filters-right">
+            <button
+              type="button"
+              className={`fav-filter-btn${onlyFavorites ? ' is-active' : ''}`}
+              onClick={() => {
+                setOnlyFavorites((v) => !v);
+                setVisibleLimit(PAGE_STEP);
+              }}
+            >
+              <Heart size={14} fill={onlyFavorites ? 'currentColor' : 'none'} />
+              <span>Favoritos ({favoriteSkus.length})</span>
+            </button>
+
             <label className="chk-pill">
               <input
                 type="checkbox"
@@ -755,7 +825,8 @@ export function App() {
             categoryId !== 'all' ||
             sizeFilter !== 'all' ||
             search ||
-            onlyPriced) && (
+            onlyPriced ||
+            onlyFavorites) && (
             <button
               type="button"
               className="btn-link"
@@ -766,12 +837,44 @@ export function App() {
                 setSizeFilter('all');
                 setSearch('');
                 setOnlyPriced(false);
+                setOnlyFavorites(false);
               }}
             >
               Limpiar filtros
             </button>
           )}
         </div>
+
+        {/* Vistos recientemente */}
+        {recentProducts.length > 0 &&
+          department === 'all' &&
+          categoryId === 'all' &&
+          sizeFilter === 'all' &&
+          !search &&
+          !onlyFavorites && (
+            <section className="recent-strip" aria-label="Vistos recientemente">
+              <div className="recent-strip__head">
+                <strong>Vistos recientemente</strong>
+                <span>Toca para volver a ver</span>
+              </div>
+              <div className="recent-strip__scroller">
+                {recentProducts.map((rp) => (
+                  <button
+                    key={rp.sku}
+                    type="button"
+                    className="recent-card"
+                    onClick={() => openProductModal(rp)}
+                  >
+                    <img src={rp.image_url} alt={rp.title} loading="lazy" />
+                    <div>
+                      <small>{rp.sku}</small>
+                      <span>{rp.title}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
         {loading ? (
           <div className="catalog-state">Cargando catálogo de {settings.store_name}...</div>
@@ -784,7 +887,11 @@ export function App() {
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="catalog-state">
-            <p>No encontramos artículos con esos filtros.</p>
+            <p>
+              {onlyFavorites
+                ? 'Aún no tienes artículos guardados en Favoritos.'
+                : 'No encontramos artículos con esos filtros.'}
+            </p>
             <button
               type="button"
               className="btn-outline"
@@ -795,6 +902,7 @@ export function App() {
                 setSizeFilter('all');
                 setSearch('');
                 setOnlyPriced(false);
+                setOnlyFavorites(false);
               }}
             >
               Ver todo el catálogo
@@ -809,7 +917,9 @@ export function App() {
                   product={product}
                   displayCurrency={displayCurrency}
                   settings={settings}
-                  onSelect={setSelectedProduct}
+                  isFavorite={favoriteSet.has(product.sku)}
+                  onToggleFavorite={toggleFavoriteSku}
+                  onSelect={openProductModal}
                   onQuickAdd={handleAddToCart}
                 />
               ))}
@@ -870,10 +980,13 @@ export function App() {
 
       {selectedProduct && (
         <ProductModal
+          key={selectedProduct.id}
           product={selectedProduct}
           displayCurrency={displayCurrency}
           settings={settings}
-          onClose={() => setSelectedProduct(null)}
+          isFavorite={favoriteSet.has(selectedProduct.sku)}
+          onToggleFavorite={toggleFavoriteSku}
+          onClose={closeProductModal}
           onAddToCart={handleAddToCart}
         />
       )}
@@ -901,6 +1014,12 @@ export function App() {
         sheinGender={sheinGender}
         deptCounts={deptCounts}
         displayCurrency={displayCurrency}
+        favoriteCount={favoriteSkus.length}
+        onlyFavorites={onlyFavorites}
+        onToggleFavorites={() => {
+          setOnlyFavorites((v) => !v);
+          setVisibleLimit(PAGE_STEP);
+        }}
         onSelectDept={handleSelectDept}
         onSelectSheinGender={handleSelectSheinGender}
         onChangeCurrency={setDisplayCurrency}

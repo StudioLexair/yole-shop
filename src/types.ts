@@ -57,9 +57,11 @@ export interface Product {
   cost_price: number | null;
   price: number | null;
   sizes: string[];
+  sold_out_sizes?: string[];
   fit_note: string;
   image_url: string;
   image_path: string;
+  extra_images?: string[];
   status: ProductStatus;
   featured: boolean;
   source_group: string;
@@ -89,6 +91,7 @@ export interface Order {
     qty: number;
     currency: Currency;
     unit_price: number | null;
+    image_url?: string;
   }>;
   subtotal_cup: number;
   subtotal_usd: number;

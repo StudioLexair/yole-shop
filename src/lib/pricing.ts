@@ -7,6 +7,13 @@ import type {
   StoreSettings,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
+import { STORAGE_BUCKET, SUPABASE_URL } from './supabase';
+
+export function resolveProductImageUrl(sku: string, imageUrl?: string): string {
+  if (imageUrl && imageUrl.trim()) return imageUrl.trim();
+  const cleanSku = sku.replace(/[^a-zA-Z0-9_-]/g, '');
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/catalog/${cleanSku}.webp`;
+}
 
 export interface SheinMarkupRules {
   shein_under_20_markup: number;
@@ -196,10 +203,12 @@ export function buildWhatsAppProductLink(
     settings.usd_to_cup_rate
   );
   const sizePart = selectedSize ? ` ${selectedSize}` : '';
+  const photoUrl = resolveProductImageUrl(product.sku, product.image_url);
   const msg = [
     '✨YoleShop✨',
     '',
     `✨Producto: [${product.sku}] ${product.title}`,
+    `📸 Foto: ${photoUrl}`,
     '',
     `💵 Precio del producto: ${priceText}${sizePart}`,
     '',
@@ -224,6 +233,7 @@ export function formatWhatsAppOrderText(params: {
     qty: number;
     currency: Currency;
     unit_price: number | null;
+    image_url?: string;
   }>;
   summary: {
     subtotalCup: number;
@@ -240,12 +250,16 @@ export function formatWhatsAppOrderText(params: {
   const single = params.items.length === 1 ? params.items[0] : null;
 
   const productLine = single
-    ? `✨Producto: ${single.qty > 1 ? `${single.qty}x ` : ''}[${single.sku}] ${single.title}`
+    ? [
+        `✨Producto: ${single.qty > 1 ? `${single.qty}x ` : ''}[${single.sku}] ${single.title}`,
+        `📸 Foto: ${resolveProductImageUrl(single.sku, single.image_url)}`,
+      ].join('\n')
     : [
         '✨Producto:',
         ...params.items.map((it) => {
           const p = formatDualPriceForMessage(it.unit_price, it.currency, rate, it.qty);
-          return `• ${it.qty}x [${it.sku}] ${it.title} (${it.size || 'Única'}) — ${p}`;
+          const photoUrl = resolveProductImageUrl(it.sku, it.image_url);
+          return `• ${it.qty}x [${it.sku}] ${it.title} (${it.size || 'Única'}) — ${p}\n  📸 ${photoUrl}`;
         }),
       ].join('\n');
 
@@ -342,6 +356,7 @@ export function buildWhatsAppOrderLink(params: {
       qty: it.qty,
       currency: it.product.currency,
       unit_price: it.product.price,
+      image_url: it.product.image_url,
     })),
     includeManager: false,
   });

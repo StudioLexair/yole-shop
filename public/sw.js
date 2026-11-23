@@ -1,6 +1,6 @@
-const CACHE_SHELL = 'yole-shell-v3';
-const CACHE_MEDIA = 'yole-media-v3';
-const CACHE_API = 'yole-api-v3';
+const CACHE_SHELL = 'yole-shell-v4';
+const CACHE_MEDIA = 'yole-media-v4';
+const CACHE_API = 'yole-api-v4';
 
 const SHELL_URLS = [
   '/',
@@ -33,11 +33,16 @@ self.addEventListener('activate', (event) => {
 
 async function staleWhileRevalidate(event, request, cacheName, fallbackUrl) {
   const cache = await caches.open(cacheName);
-  const cached = (await cache.match(request)) || (fallbackUrl ? await cache.match(fallbackUrl) : null);
+  const rawCached =
+    (await cache.match(request)) || (fallbackUrl ? await cache.match(fallbackUrl) : null);
+  const cached =
+    rawCached && (request.mode !== 'cors' || rawCached.type !== 'opaque')
+      ? rawCached
+      : null;
 
   const isOffline = typeof self.navigator !== 'undefined' && self.navigator.onLine === false;
-  if (isOffline && cached) {
-    return cached;
+  if (isOffline && (cached || rawCached)) {
+    return cached || rawCached;
   }
 
   const networkPromise = fetch(request)

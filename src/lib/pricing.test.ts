@@ -102,6 +102,7 @@ describe('pricing & WhatsApp helpers', () => {
     expect(pLink.startsWith('https://api.whatsapp.com/send/?phone=5352678747&text=')).toBe(true);
     expect(pLink).not.toContain('%EF%BF%BD');
     expect(decodeURIComponent(pLink)).toContain('✨YoleShop✨');
+    expect(decodeURIComponent(pLink)).toContain('📸 Foto: https://example.com/1.webp');
 
     const oLink = buildWhatsAppOrderLink({
       orderCode: 'YOL-TEST',
@@ -120,6 +121,7 @@ describe('pricing & WhatsApp helpers', () => {
     expect(oLink).not.toContain('%EF%BF%BD');
     const decodedOrder = decodeURIComponent(oLink);
     expect(decodedOrder).toContain('✨YoleShop✨');
+    expect(decodedOrder).toContain('📸 Foto: https://example.com/1.webp');
     expect(decodedOrder).toContain('💵 Precio del producto:');
     expect(decodedOrder).toContain('YOL-003');
     expect(decodedOrder).toContain('moneda nacional 35000');

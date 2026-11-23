@@ -3,6 +3,7 @@ import {
   Check,
   ChevronRight,
   Download,
+  Heart,
   Lock,
   MessageCircle,
   Smartphone,
@@ -25,6 +26,9 @@ interface BottomMenuSheetProps {
     accesorios: number;
   };
   displayCurrency: Currency;
+  favoriteCount?: number;
+  onlyFavorites?: boolean;
+  onToggleFavorites?: () => void;
   onSelectDept: (dep: Department | 'all') => void;
   onSelectSheinGender: (g: 'all' | 'mujer' | 'hombre') => void;
   onChangeCurrency: (c: Currency) => void;
@@ -43,6 +47,9 @@ export function BottomMenuSheet({
   sheinGender,
   deptCounts,
   displayCurrency,
+  favoriteCount = 0,
+  onlyFavorites = false,
+  onToggleFavorites,
   onSelectDept,
   onSelectSheinGender,
   onChangeCurrency,
@@ -180,6 +187,26 @@ export function BottomMenuSheet({
                   <ChevronRight size={16} />
                 </span>
               </button>
+
+              {onToggleFavorites && (
+                <button
+                  type="button"
+                  className={`sheet-nav-item${onlyFavorites ? ' is-active' : ''}`}
+                  onClick={() => {
+                    onToggleFavorites();
+                    onClose();
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    <Heart size={15} fill={onlyFavorites ? 'currentColor' : 'none'} />
+                    Favoritos guardados
+                  </span>
+                  <span className="sheet-nav-right">
+                    <strong>{favoriteCount}</strong>
+                    <ChevronRight size={16} />
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 

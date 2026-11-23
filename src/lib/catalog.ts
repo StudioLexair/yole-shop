@@ -46,11 +46,25 @@ export function sortSizesList(sizes: string[]): string[] {
   });
 }
 
+export function normalizeSearchText(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function getAvailableSizes(product: Pick<Product, 'sizes' | 'sold_out_sizes'>): string[] {
+  const soldOut = new Set(product.sold_out_sizes || []);
+  return product.sizes.filter((s) => s && !soldOut.has(s));
+}
+
 export function collectAvailableSizes(products: Product[]): string[] {
   const set = new Set<string>();
   for (const p of products) {
     if (p.status === 'hidden') continue;
-    for (const s of p.sizes) {
+    for (const s of getAvailableSizes(p)) {
       if (s && s !== 'Consultar') set.add(s);
     }
   }
@@ -62,7 +76,8 @@ export function filterProducts(
   filters: CatalogFilters,
   usdToCupRate: number
 ): Product[] {
-  const q = filters.search.trim().toLowerCase();
+  const qNorm = normalizeSearchText(filters.search);
+  const tokens = qNorm ? qNorm.split(' ').filter(Boolean) : [];
 
   const filtered = products.filter((p) => {
     if (p.status === 'hidden') return false;
@@ -73,11 +88,13 @@ export function filterProducts(
       return false;
     }
     if (filters.categoryId !== 'all' && p.category_id !== filters.categoryId) return false;
-    if (filters.size !== 'all' && !p.sizes.includes(filters.size)) return false;
+    if (filters.size !== 'all' && !getAvailableSizes(p).includes(filters.size)) return false;
     if (filters.onlyPriced && (p.price === null || !Number.isFinite(p.price))) return false;
-    if (q) {
-      const hay = `${p.sku} ${p.title} ${p.brand} ${p.quality} ${p.fit_note} ${p.sizes.join(' ')}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+    if (tokens.length > 0) {
+      const hay = normalizeSearchText(
+        `${p.sku} ${p.title} ${p.brand} ${p.quality} ${p.fit_note} ${getAvailableSizes(p).join(' ')}`
+      );
+      if (!tokens.every((t) => hay.includes(t))) return false;
     }
     return true;
   });
@@ -189,6 +206,8 @@ export async function fetchStoreData(): Promise<{
     cost_price: row.cost_price !== null && row.cost_price !== undefined ? Number(row.cost_price) : null,
     price: row.price !== null && row.price !== undefined ? Number(row.price) : null,
     sizes: Array.isArray(row.sizes) ? row.sizes : [],
+    sold_out_sizes: Array.isArray(row.sold_out_sizes) ? row.sold_out_sizes : [],
+    extra_images: Array.isArray(row.extra_images) ? row.extra_images : [],
   }));
 
   const pricePresets: PricePreset[] = (presetsRes.data || []).map((row) => ({
@@ -238,6 +257,8 @@ export async function saveProduct(
       cost_price: data.cost_price !== null ? Number(data.cost_price) : null,
       price: data.price !== null ? Number(data.price) : null,
       sizes: Array.isArray(data.sizes) ? data.sizes : [],
+      sold_out_sizes: Array.isArray(data.sold_out_sizes) ? data.sold_out_sizes : [],
+      extra_images: Array.isArray(data.extra_images) ? data.extra_images : [],
     };
   }
   const { data, error } = await supabase.from('products').insert(payload).select('*').single();
@@ -247,6 +268,8 @@ export async function saveProduct(
     cost_price: data.cost_price !== null ? Number(data.cost_price) : null,
     price: data.price !== null ? Number(data.price) : null,
     sizes: Array.isArray(data.sizes) ? data.sizes : [],
+    sold_out_sizes: Array.isArray(data.sold_out_sizes) ? data.sold_out_sizes : [],
+    extra_images: Array.isArray(data.extra_images) ? data.extra_images : [],
   };
 }
 
@@ -353,4 +376,88 @@ export async function fetchOrders(): Promise<Order[]> {
 export async function updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
   const { error } = await supabase.from('orders').update({ status }).eq('id', id);
   if (error) throw error;
+}
+
+const FAVORITES_KEY = 'yole_shop_favorites_v1';
+const RECENT_KEY = 'yole_shop_recent_v1';
+const CUSTOMER_PROFILE_KEY = 'yole_shop_customer_profile_v1';
+
+export interface SavedCustomerProfile {
+  customerName: string;
+  customerPhone: string;
+  deliveryType: 'domicilio' | 'recogida';
+  deliveryAddress: string;
+  paymentMethod: 'efectivo' | 'transferencia' | 'usd';
+  deliveryTime: string;
+}
+
+export function readFavoriteSkus(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(FAVORITES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeFavoriteSkus(skus: string[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(skus));
+  } catch {
+    // ignore
+  }
+}
+
+export function readRecentSkus(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(RECENT_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function pushRecentSku(sku: string): string[] {
+  const next = [sku, ...readRecentSkus().filter((s) => s !== sku)].slice(0, 12);
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }
+  return next;
+}
+
+export function readCustomerProfile(): SavedCustomerProfile | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(CUSTOMER_PROFILE_KEY);
+    return raw ? (JSON.parse(raw) as SavedCustomerProfile) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCustomerProfile(profile: SavedCustomerProfile): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(CUSTOMER_PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // ignore
+  }
+}
+
+export function clearCustomerProfile(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(CUSTOMER_PROFILE_KEY);
+  } catch {
+    // ignore
+  }
 }
