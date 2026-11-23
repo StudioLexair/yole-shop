@@ -1155,7 +1155,7 @@ export function AdminView({
                       }));
                     return (
                       <tr key={pr.id} className={d.dirty ? 'is-dirty' : ''}>
-                        <td>
+                        <td data-label="Grupo">
                           <input
                             type="text"
                             className="tbl-input tbl-input--title"
@@ -1163,7 +1163,7 @@ export function AdminView({
                             onChange={(e) => updatePrDraft({ name: e.target.value })}
                           />
                         </td>
-                        <td>
+                        <td data-label="Departamento">
                           <select
                             className="tbl-select"
                             value={d.department}
@@ -1178,7 +1178,7 @@ export function AdminView({
                             ))}
                           </select>
                         </td>
-                        <td>
+                        <td data-label="Moneda">
                           <select
                             className="tbl-select tbl-select--curr"
                             value={d.currency}
@@ -1190,7 +1190,7 @@ export function AdminView({
                             <option value="CUP">CUP</option>
                           </select>
                         </td>
-                        <td>
+                        <td data-label="Precio del grupo">
                           <input
                             type="number"
                             step="any"
@@ -1200,7 +1200,7 @@ export function AdminView({
                             onChange={(e) => updatePrDraft({ priceStr: e.target.value })}
                           />
                         </td>
-                        <td>
+                        <td data-label="Vinculados">
                           <button
                             type="button"
                             className="btn-outline"
@@ -1213,7 +1213,7 @@ export function AdminView({
                             Ver {linkedCount} productos
                           </button>
                         </td>
-                        <td>
+                        <td data-label="Acciones">
                           <div className="tbl-actions">
                             <button
                               type="button"
@@ -1326,6 +1326,15 @@ export function AdminView({
               </label>
 
               <div className="admin-automation-strip__right">
+                <button
+                  type="button"
+                  className="btn-outline mobile-select-all-btn"
+                  onClick={toggleSelectAllVisible}
+                >
+                  {allVisibleSelected
+                    ? `Quitar selección (${visibleSelectedCount})`
+                    : `Seleccionar visibles (${filteredProducts.length})`}
+                </button>
                 {dirtyProducts.length > 0 && (
                   <button
                     type="button"
@@ -1479,20 +1488,25 @@ export function AdminView({
                     const checked = selectedIds.includes(p.id);
                     const costNum = parseFloat(d.costStr);
                     const previewMarkup =
-                      Number.isFinite(costNum) && costNum > 0
+                      d.currency === 'USD' && Number.isFinite(costNum) && costNum > 0
                         ? calcYoleSheinPrice(costNum, cfg) - costNum
                         : null;
+                    const displayCostVal =
+                      d.currency === 'CUP' && d.costStr === d.priceStr ? '' : d.costStr;
                     return (
                       <tr key={p.id} className={`${d.dirty ? 'is-dirty' : ''} ${checked ? 'is-selected' : ''}`}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleSelectRow(p.id)}
-                            aria-label={`Seleccionar ${p.sku}`}
-                          />
+                        <td className="tbl-chk-cell">
+                          <label className="chk-inline">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSelectRow(p.id)}
+                              aria-label={`Seleccionar ${p.sku}`}
+                            />
+                            <span className="mobile-only-label">Seleccionar {p.sku}</span>
+                          </label>
                         </td>
-                        <td>
+                        <td data-label="Foto / SKU">
                           <div className="tbl-photo-cell">
                             <img src={p.image_url} alt={p.sku} loading="lazy" />
                             <div>
@@ -1513,7 +1527,7 @@ export function AdminView({
                             </div>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Producto y Categoría">
                           <div className="tbl-stack">
                             <input
                               type="text"
@@ -1549,7 +1563,7 @@ export function AdminView({
                             </div>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Grupo de Precio (1 clic)">
                           <div className="tbl-stack">
                             <select
                               className="tbl-select"
@@ -1571,7 +1585,7 @@ export function AdminView({
                                 min="0"
                                 className="tbl-input"
                                 placeholder="Costo USD (+2/+3)"
-                                value={d.costStr}
+                                value={displayCostVal}
                                 onChange={(e) =>
                                   updateDraft(p.id, { costStr: e.target.value }, true)
                                 }
@@ -1584,7 +1598,7 @@ export function AdminView({
                             </div>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Precio Venta">
                           <div className="tbl-price-box">
                             <input
                               type="number"
@@ -1607,7 +1621,7 @@ export function AdminView({
                             </select>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Tallas y Nota">
                           <div className="tbl-stack">
                             <input
                               type="text"
@@ -1625,7 +1639,7 @@ export function AdminView({
                             />
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Estado">
                           <div className="tbl-stack">
                             <select
                               className={`tbl-select status-sel status-sel--${d.status}`}
@@ -1650,7 +1664,7 @@ export function AdminView({
                             </label>
                           </div>
                         </td>
-                        <td>
+                        <td className="tbl-actions-cell">
                           <div className="tbl-actions">
                             <button
                               type="button"
