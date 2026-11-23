@@ -142,12 +142,15 @@ describe('Yole Shop App', () => {
     expect(screen.getByRole('button', { name: 'Enviar pedido a WhatsApp' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar carrito' }));
 
-    // Filtra Moda Shein -> muestra Mujer y Hombre juntos y permite elegir Hombre dentro
+    // Filtra Moda Shein -> muestra Mujer y Hombre juntos y permite elegir Hombre dentro del panel Filtros
     fireEvent.click(screen.getByRole('button', { name: /Moda Shein 2/i }));
     expect(screen.getByText('Vestido Corto Satén Chocolate')).toBeInTheDocument();
     expect(screen.getByText('Sudadera Hoodie Café Osito Bordado')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Hombre \(1\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    fireEvent.click(within(filterDialog).getByRole('button', { name: /Hombre \(1\)/i }));
+    fireEvent.click(within(filterDialog).getByRole('button', { name: /Ver 1 resultados/i }));
     expect(screen.queryByText('Vestido Corto Satén Chocolate')).not.toBeInTheDocument();
     expect(screen.getByText('Sudadera Hoodie Café Osito Bordado')).toBeInTheDocument();
 
@@ -175,25 +178,35 @@ describe('Yole Shop App', () => {
     });
   });
 
-  it('soporta favoritos, tallas agotadas por separado y botones compartir/descargar en ficha', async () => {
+  it('soporta favoritos desde Filtros, tallas agotadas por separado y botones compartir/descargar en ficha', async () => {
     render(<App />);
 
     await waitFor(() => {
       expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
     });
 
-    // Guardar en favoritos y filtrar por favoritos
+    // Los filtros en línea ya no saturan la vista principal
+    expect(screen.queryByLabelText('Filtrar por presupuesto')).not.toBeInTheDocument();
+
+    // Guardar en favoritos y filtrar por favoritos dentro de Filtros
     fireEvent.click(
       screen.getByRole('button', {
         name: /Guardar Cartera Dior Beige & Negra en favoritos/i,
       })
     );
-    fireEvent.click(screen.getByRole('button', { name: /Favoritos \(1\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    let filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    fireEvent.click(within(filterDialog).getByRole('button', { name: /Favoritos \(1\)/i }));
+    fireEvent.click(within(filterDialog).getByRole('button', { name: /Ver 1 resultados/i }));
     expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
     expect(screen.queryByText('New Balance 9060 Blanco & Rosa')).not.toBeInTheDocument();
 
     // Quitar filtro favoritos y abrir modal con botones Compartir y Descargar foto
-    fireEvent.click(screen.getByRole('button', { name: /Favoritos \(1\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    fireEvent.click(within(filterDialog).getByRole('button', { name: /Favoritos \(1\)/i }));
+    fireEvent.click(within(filterDialog).getByRole('button', { name: /Cerrar filtros/i }));
+
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
     const modal = screen.getByRole('dialog');
     expect(within(modal).getByRole('button', { name: '36' })).toBeDisabled();
@@ -205,21 +218,41 @@ describe('Yole Shop App', () => {
     expect(screen.getByLabelText('Vistos recientemente')).toBeInTheDocument();
   });
 
-  it('filtra por presupuesto, cambia a modo oscuro y abre visor fullscreen lightbox', async () => {
+  it('filtra por presupuesto en Filtros, corrige typos en búsqueda inteligente y abre lightbox', async () => {
     render(<App />);
 
     await waitFor(() => {
       expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
     });
 
-    // Presupuesto $15 - $30 USD muestra Cartera Dior ($18) y oculta New Balance ($35.71) y Sudadera ($38)
-    fireEvent.click(screen.getByRole('button', { name: '$15 – $30 USD' }));
+    // Presupuesto $15 - $30 USD dentro de Filtros
+    fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    fireEvent.click(within(filterDialog).getByRole('button', { name: '$15 – $30 USD' }));
+    fireEvent.click(within(filterDialog).getByRole('button', { name: /Ver 1 resultados/i }));
     expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
     expect(screen.queryByText('New Balance 9060 Blanco & Rosa')).not.toBeInTheDocument();
     expect(screen.queryByText('Sudadera Hoodie Café Osito Bordado')).not.toBeInTheDocument();
 
     // Limpiar filtros vuelve a mostrar todo
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
+    expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+
+    // Búsqueda inteligente: al enfocar muestra popover y al escribir "neww balance" corrige y sugiere "¿Quisiste decir New Balance?"
+    const searchInput = screen.getByRole('searchbox', { name: 'Buscar en todo el catálogo' });
+    fireEvent.focus(searchInput);
+    expect(screen.getByRole('region', { name: 'Búsqueda inteligente' })).toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: 'neww balance' } });
+    const dymBtn = screen.getByRole('button', { name: /¿Quisiste decir New Balance/i });
+    expect(dymBtn).toBeInTheDocument();
+    expect(screen.getAllByText('New Balance 9060 Blanco & Rosa').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Cartera Dior Beige & Negra')).not.toBeInTheDocument();
+
+    // Aceptar sugerencia aplica "New Balance" y cierra el popover
+    fireEvent.click(dymBtn);
+    expect((searchInput as HTMLInputElement).value).toBe('New Balance');
+    expect(screen.queryByRole('region', { name: 'Búsqueda inteligente' })).not.toBeInTheDocument();
     expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
 
     // Modo oscuro desde BottomMenuSheet aplica data-theme="dark" en <html>

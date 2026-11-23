@@ -4,14 +4,13 @@ import {
   ArrowUp,
   Download,
   Flame,
-  Heart,
   Lock,
   Menu,
   MessageCircle,
   Search,
   ShoppingBag,
   SlidersHorizontal,
-  Tag,
+  Sparkles,
   X,
 } from 'lucide-react';
 import type {
@@ -50,6 +49,12 @@ import { SplashLoader } from './components/SplashLoader';
 import { FloatingCartButton } from './components/FloatingCartButton';
 import { BottomMenuSheet } from './components/BottomMenuSheet';
 import { SmartImage } from './components/SmartImage';
+import { FilterSheet } from './components/FilterSheet';
+import {
+  buildSearchLexicon,
+  buildSearchSuggestions,
+  parseSmartQuery,
+} from './lib/smartSearch';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -115,6 +120,9 @@ export function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -163,6 +171,26 @@ export function App() {
     return () => {
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('hashchange', onPop);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onPointerDown = (e: MouseEvent) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSearchFocused(false);
+        setFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, []);
 
@@ -368,11 +396,35 @@ export function App() {
     [products]
   );
 
+  const searchLexicon = useMemo(
+    () => buildSearchLexicon(products, categories),
+    [products, categories]
+  );
+
+  const parsedSearch = useMemo(
+    () => (search.trim() ? parseSmartQuery(search, searchLexicon) : null),
+    [search, searchLexicon]
+  );
+
+  const searchSuggestions = useMemo(
+    () =>
+      buildSearchSuggestions(
+        search,
+        products,
+        categories,
+        settings.usd_to_cup_rate,
+        searchLexicon
+      ),
+    [search, products, categories, settings.usd_to_cup_rate, searchLexicon]
+  );
+
+  const effectiveSearchDept: DepartmentFilter = search.trim() ? 'all' : activeDeptFilter;
+
   const filteredProducts = useMemo(() => {
     const base = filterProducts(
       products,
       {
-        department: activeDeptFilter,
+        department: effectiveSearchDept,
         categoryId,
         size: sizeFilter,
         search,
@@ -381,13 +433,17 @@ export function App() {
         includeSoldOut: settings.show_sold_out_public,
         sort,
       },
-      settings.usd_to_cup_rate
+      settings.usd_to_cup_rate,
+      categories,
+      searchLexicon
     );
     if (!onlyFavorites) return base;
     return base.filter((p) => favoriteSet.has(p.sku));
   }, [
     products,
-    activeDeptFilter,
+    categories,
+    searchLexicon,
+    effectiveSearchDept,
     categoryId,
     sizeFilter,
     search,
@@ -399,6 +455,31 @@ export function App() {
     sort,
     settings.usd_to_cup_rate,
   ]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (sheinGender !== 'all') count += 1;
+    if (categoryId !== 'all') count += 1;
+    if (sizeFilter !== 'all') count += 1;
+    if (priceRange !== 'all') count += 1;
+    if (onlyPriced) count += 1;
+    if (onlyFavorites) count += 1;
+    if (sort !== 'featured') count += 1;
+    return count;
+  }, [sheinGender, categoryId, sizeFilter, priceRange, onlyPriced, onlyFavorites, sort]);
+
+  const clearAllFilters = useCallback(() => {
+    setDepartment('all');
+    setSheinGender('all');
+    setCategoryId('all');
+    setSizeFilter('all');
+    setPriceRange('all');
+    setSearch('');
+    setOnlyPriced(false);
+    setOnlyFavorites(false);
+    setSort('featured');
+    setVisibleLimit(PAGE_STEP);
+  }, []);
 
   const visibleProducts = useMemo(
     () => filteredProducts.slice(0, visibleLimit),
@@ -686,209 +767,279 @@ export function App() {
 
       {/* Catalog Controls & Grid */}
       <main id="catalogo" className="container catalog-section">
-        <div className="filters-bar">
-          <div className="search-input-wrap">
-            <Search size={17} />
-            <input
-              type="search"
-              placeholder="Buscar modelo, marca (Jordan, NB, Nike, Shein) o código YOL-..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setVisibleLimit(PAGE_STEP);
-              }}
-            />
-            {search && (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label="Limpiar búsqueda"
-                onClick={() => setSearch('')}
+        <div className="search-filter-row">
+          <div
+            ref={searchWrapRef}
+            className={`search-box-shell${searchFocused ? ' is-focused' : ''}`}
+          >
+            <div className="search-input-wrap">
+              <Search size={17} />
+              <input
+                type="search"
+                aria-label="Buscar en todo el catálogo"
+                placeholder="Buscar tenis, vestidos, marca, o ej. 'menos de $25'..."
+                value={search}
+                onFocus={() => setSearchFocused(true)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSearchFocused(true);
+                  setVisibleLimit(PAGE_STEP);
+                }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  aria-label="Limpiar búsqueda"
+                  onClick={() => setSearch('')}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {searchFocused && (
+              <div
+                className="search-popover"
+                role="region"
+                aria-label="Búsqueda inteligente"
               >
-                <X size={14} />
-              </button>
+                <div className="search-popover__head">
+                  <span className="search-popover__kicker">
+                    <Sparkles size={13} />
+                    {search.trim()
+                      ? 'Sugerencias inteligentes en toda la tienda'
+                      : 'Búsqueda inteligente · Prueba escribir marca, prenda o precio'}
+                  </span>
+                  <button
+                    type="button"
+                    className="search-popover__close"
+                    aria-label="Cerrar sugerencias"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setSearchFocused(false)}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+
+                {searchSuggestions.didYouMean && (
+                  <button
+                    type="button"
+                    className="did-you-mean-btn"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setSearch(searchSuggestions.didYouMean!);
+                      setSearchFocused(false);
+                      setVisibleLimit(PAGE_STEP);
+                    }}
+                  >
+                    <Sparkles size={14} />
+                    <span>
+                      ¿Quisiste decir <strong>{searchSuggestions.didYouMean}</strong>?
+                    </span>
+                  </button>
+                )}
+
+                {searchSuggestions.priceIntentLabel && (
+                  <div className="search-intent-pill">
+                    Filtro detectado: <strong>{searchSuggestions.priceIntentLabel}</strong>
+                  </div>
+                )}
+
+                {searchSuggestions.quickChips.length > 0 && (
+                  <div className="search-popover__chips">
+                    {searchSuggestions.quickChips.map((chipLabel) => (
+                      <button
+                        key={chipLabel}
+                        type="button"
+                        className="chip chip--sm"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setSearch(chipLabel);
+                          setSearchFocused(false);
+                          setVisibleLimit(PAGE_STEP);
+                        }}
+                      >
+                        {chipLabel}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {search.trim() && searchSuggestions.topProducts.length > 0 && (
+                  <div className="search-popover__hits">
+                    {searchSuggestions.topProducts.map((hit) => {
+                      const hp = getDisplayPrice(
+                        hit,
+                        displayCurrency,
+                        settings.usd_to_cup_rate
+                      );
+                      return (
+                        <button
+                          key={`hit-${hit.sku}`}
+                          type="button"
+                          className="search-hit-row"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setSearchFocused(false);
+                            openProductModal(hit);
+                          }}
+                        >
+                          <div className="search-hit-thumb">
+                            <SmartImage
+                              src={hit.image_url}
+                              alt={hit.title}
+                              variant="compact"
+                              loading="eager"
+                            />
+                          </div>
+                          <div className="search-hit-info">
+                            <strong>{hit.title}</strong>
+                            <small>
+                              {hit.brand} · {hit.sku}
+                            </small>
+                          </div>
+                          <span className="search-hit-price">{hp.primary}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
-          <div className="filters-right">
-            <button
-              type="button"
-              className={`fav-filter-btn${onlyFavorites ? ' is-active' : ''}`}
-              onClick={() => {
-                setOnlyFavorites((v) => !v);
-                setVisibleLimit(PAGE_STEP);
-              }}
-            >
-              <Heart size={14} fill={onlyFavorites ? 'currentColor' : 'none'} />
-              <span>Favoritos ({favoriteSkus.length})</span>
-            </button>
-
-            <button
-              type="button"
-              aria-pressed={onlyPriced}
-              className={`pill-filter-btn${onlyPriced ? ' is-active' : ''}`}
-              onClick={() => setOnlyPriced((v) => !v)}
-            >
-              <Tag size={14} />
-              <span>Con precio</span>
-            </button>
-
-            <div className="sort-wrap">
-              <SlidersHorizontal size={14} />
-              <select
-                aria-label="Ordenar catálogo"
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortMode)}
-              >
-                <option value="featured">Destacados</option>
-                <option value="price_asc">Menor precio</option>
-                <option value="price_desc">Mayor precio</option>
-                <option value="newest">Más recientes</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Sub-filtro Mujer / Hombre dentro de Moda Shein */}
-        {department === 'moda_shein' && (
-          <div className="sizes-filter-row shein-gender-row" aria-label="Filtrar Moda Shein por género">
-            <span className="sizes-filter-label">Moda:</span>
-            <div className="chips-scroller chips-scroller--compact">
-              <button
-                type="button"
-                className={`chip${sheinGender === 'all' ? ' is-active' : ''}`}
-                onClick={() => handleSelectSheinGender('all')}
-              >
-                Todo ({deptCounts.moda_shein + deptCounts.hombre})
-              </button>
-              <button
-                type="button"
-                className={`chip${sheinGender === 'mujer' ? ' is-active' : ''}`}
-                onClick={() => handleSelectSheinGender('mujer')}
-              >
-                Mujer ({deptCounts.moda_shein})
-              </button>
-              <button
-                type="button"
-                className={`chip${sheinGender === 'hombre' ? ' is-active' : ''}`}
-                onClick={() => handleSelectSheinGender('hombre')}
-              >
-                Hombre ({deptCounts.hombre})
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Category Chips */}
-        <div className="chips-scroller" aria-label="Categorías">
           <button
             type="button"
-            className={`chip${categoryId === 'all' ? ' is-active' : ''}`}
-            onClick={() => {
-              setCategoryId('all');
-              setVisibleLimit(PAGE_STEP);
-            }}
+            className={`filter-trigger-btn${activeFilterCount > 0 ? ' has-active' : ''}`}
+            aria-label="Filtros"
+            onClick={() => setFilterOpen(true)}
           >
-            Todas las categorías
+            <SlidersHorizontal size={16} />
+            <span>Filtros</span>
+            {activeFilterCount > 0 && (
+              <span className="filter-badge">{activeFilterCount}</span>
+            )}
           </button>
-          {visibleCategories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`chip${categoryId === cat.id ? ' is-active' : ''}`}
-              onClick={() => {
-                setCategoryId(cat.id);
-                setVisibleLimit(PAGE_STEP);
-              }}
-            >
-              {cat.name}
-            </button>
-          ))}
         </div>
 
-        {/* Size Filter Chips */}
-        {availableSizes.length > 0 && (
-          <div className="sizes-filter-row" aria-label="Filtrar por talla disponible">
-            <span className="sizes-filter-label">Talla:</span>
-            <div className="chips-scroller chips-scroller--compact">
+        {/* Typo correction banner when popover is closed */}
+        {!searchFocused && parsedSearch?.didYouMean && (
+          <div className="did-you-mean-inline" role="status">
+            <Sparkles size={14} />
+            <span>
+              ¿Quisiste decir{' '}
               <button
                 type="button"
-                className={`chip chip--sm${sizeFilter === 'all' ? ' is-active' : ''}`}
-                onClick={() => setSizeFilter('all')}
+                className="btn-link"
+                onClick={() => setSearch(parsedSearch.didYouMean!)}
               >
-                Todas
+                <strong>{parsedSearch.didYouMean}</strong>
               </button>
-              {availableSizes.map((sz) => (
-                <button
-                  key={sz}
-                  type="button"
-                  className={`chip chip--sm${sizeFilter === sz ? ' is-active' : ''}`}
-                  onClick={() => {
-                    setSizeFilter(sizeFilter === sz ? 'all' : sz);
-                    setVisibleLimit(PAGE_STEP);
-                  }}
-                >
-                  {sz}
-                </button>
-              ))}
-            </div>
+              ? Mostrando resultados sugeridos.
+            </span>
           </div>
         )}
 
-        {/* Budget Filter Chips */}
-        <div className="sizes-filter-row" aria-label="Filtrar por presupuesto">
-          <span className="sizes-filter-label">Presupuesto:</span>
-          <div className="chips-scroller chips-scroller--compact">
-            {(
-              [
-                ['all', 'Todos'],
-                ['under15', 'Hasta $15 USD'],
-                ['15to30', '$15 – $30 USD'],
-                ['over30', '+$30 USD'],
-              ] as Array<[PriceRangeFilter, string]>
-            ).map(([val, label]) => (
+        {/* Active removable filter pills (only shown when user has filters applied) */}
+        {(activeFilterCount > 0 || parsedSearch?.priceIntentLabel) && (
+          <div className="active-filter-pills" aria-label="Filtros activos">
+            {parsedSearch?.priceIntentLabel && (
+              <span className="active-pill active-pill--smart">
+                <Sparkles size={12} /> {parsedSearch.priceIntentLabel}
+              </span>
+            )}
+            {sheinGender !== 'all' && (
               <button
-                key={val}
                 type="button"
-                className={`chip chip--sm${priceRange === val ? ' is-active' : ''}`}
-                onClick={() => {
-                  setPriceRange(val);
-                  setVisibleLimit(PAGE_STEP);
-                }}
+                className="active-pill"
+                onClick={() => setSheinGender('all')}
               >
-                {label}
+                Moda: {sheinGender === 'mujer' ? 'Mujer' : 'Hombre'} <X size={12} />
               </button>
-            ))}
+            )}
+            {categoryId !== 'all' && (
+              <button
+                type="button"
+                className="active-pill"
+                onClick={() => setCategoryId('all')}
+              >
+                {categories.find((c) => c.id === categoryId)?.name || 'Categoría'}{' '}
+                <X size={12} />
+              </button>
+            )}
+            {sizeFilter !== 'all' && (
+              <button
+                type="button"
+                className="active-pill"
+                onClick={() => setSizeFilter('all')}
+              >
+                Talla: {sizeFilter} <X size={12} />
+              </button>
+            )}
+            {priceRange !== 'all' && (
+              <button
+                type="button"
+                className="active-pill"
+                onClick={() => setPriceRange('all')}
+              >
+                {priceRange === 'under15'
+                  ? 'Hasta $15 USD'
+                  : priceRange === '15to30'
+                    ? '$15 – $30 USD'
+                    : '+$30 USD'}{' '}
+                <X size={12} />
+              </button>
+            )}
+            {onlyFavorites && (
+              <button
+                type="button"
+                className="active-pill"
+                onClick={() => setOnlyFavorites(false)}
+              >
+                Favoritos <X size={12} />
+              </button>
+            )}
+            {onlyPriced && (
+              <button
+                type="button"
+                className="active-pill"
+                onClick={() => setOnlyPriced(false)}
+              >
+                Con precio <X size={12} />
+              </button>
+            )}
+            {sort !== 'featured' && (
+              <button
+                type="button"
+                className="active-pill"
+                onClick={() => setSort('featured')}
+              >
+                {sort === 'price_asc'
+                  ? 'Menor precio'
+                  : sort === 'price_desc'
+                    ? 'Mayor precio'
+                    : 'Más recientes'}{' '}
+                <X size={12} />
+              </button>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Active Result Count */}
         <div className="results-meta">
           <span>
             Mostrando <strong>{visibleProducts.length}</strong> de{' '}
             <strong>{filteredProducts.length}</strong> artículos
+            {search.trim() && department !== 'all' ? ' (búsqueda global)' : ''}
           </span>
           {(department !== 'all' ||
-            sheinGender !== 'all' ||
-            categoryId !== 'all' ||
-            sizeFilter !== 'all' ||
-            priceRange !== 'all' ||
-            search ||
-            onlyPriced ||
-            onlyFavorites) && (
+            activeFilterCount > 0 ||
+            search) && (
             <button
               type="button"
               className="btn-link"
-              onClick={() => {
-                setDepartment('all');
-                setSheinGender('all');
-                setCategoryId('all');
-                setSizeFilter('all');
-                setPriceRange('all');
-                setSearch('');
-                setOnlyPriced(false);
-                setOnlyFavorites(false);
-              }}
+              onClick={clearAllFilters}
             >
               Limpiar filtros
             </button>
@@ -1140,6 +1291,45 @@ export function App() {
       <FloatingCartButton
         totalUnits={totalUnits}
         onOpenCart={() => setCartOpen(true)}
+      />
+
+      <FilterSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        totalResults={filteredProducts.length}
+        department={department}
+        sheinGender={sheinGender}
+        deptCounts={deptCounts}
+        categories={visibleCategories}
+        categoryId={categoryId}
+        availableSizes={availableSizes}
+        sizeFilter={sizeFilter}
+        priceRange={priceRange}
+        sort={sort}
+        onlyPriced={onlyPriced}
+        onlyFavorites={onlyFavorites}
+        favoriteCount={favoriteSkus.length}
+        onSelectDept={handleSelectDept}
+        onSelectSheinGender={handleSelectSheinGender}
+        onSelectCategory={(id) => {
+          setCategoryId(id);
+          setVisibleLimit(PAGE_STEP);
+        }}
+        onSelectSize={(sz) => {
+          setSizeFilter(sz);
+          setVisibleLimit(PAGE_STEP);
+        }}
+        onSelectPriceRange={(pr) => {
+          setPriceRange(pr);
+          setVisibleLimit(PAGE_STEP);
+        }}
+        onChangeSort={(s) => setSort(s)}
+        onTogglePriced={() => setOnlyPriced((v) => !v)}
+        onToggleFavorites={() => {
+          setOnlyFavorites((v) => !v);
+          setVisibleLimit(PAGE_STEP);
+        }}
+        onClearAll={clearAllFilters}
       />
 
       <BottomMenuSheet
