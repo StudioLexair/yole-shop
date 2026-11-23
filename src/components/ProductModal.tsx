@@ -15,6 +15,7 @@ import type { Currency, Product, StoreSettings } from '../types';
 import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
 import { getAvailableSizes } from '../lib/catalog';
 import { downloadRemoteImage, shareProductLink } from '../lib/mediaHelpers';
+import { SmartImage } from './SmartImage';
 
 interface ProductModalProps {
   product: Product;
@@ -112,9 +113,13 @@ export function ProductModal({
           <div className="modal-grid">
             <div className="modal-media-wrap">
               <div className="modal-media">
-                <img
+                <SmartImage
                   src={activePhoto}
                   alt={product.title}
+                  loading="eager"
+                  fetchPriority="high"
+                  variant="card"
+                  showRetryOnError
                   onClick={() => setLightboxOpen(true)}
                   title="Toca para ampliar en pantalla completa"
                   style={{ cursor: 'zoom-in' }}
@@ -164,7 +169,11 @@ export function ProductModal({
                       onClick={() => setPhotoIdx(idx)}
                       aria-label={`Ver foto ${idx + 1}`}
                     >
-                      <img src={url} alt={`${product.title} vista ${idx + 1}`} />
+                      <SmartImage
+                        src={url}
+                        alt={`${product.title} vista ${idx + 1}`}
+                        variant="compact"
+                      />
                     </button>
                   ))}
                 </div>
@@ -340,7 +349,13 @@ export function ProductModal({
                 <ChevronLeft size={24} />
               </button>
             )}
-            <img src={activePhoto} alt={product.title} />
+            <SmartImage
+              src={activePhoto}
+              alt={product.title}
+              loading="eager"
+              variant="lightbox"
+              showRetryOnError
+            />
             {gallery.length > 1 && (
               <button
                 type="button"

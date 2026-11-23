@@ -19,6 +19,7 @@ import {
   submitPublicOrder,
   writeCustomerProfile,
 } from '../lib/catalog';
+import { SmartImage } from './SmartImage';
 
 interface CartDrawerProps {
   open: boolean;
@@ -177,7 +178,12 @@ export function CartDrawer({
                   );
                   return (
                     <div key={`${it.product.sku}-${it.size}`} className="cart-item">
-                      <img src={it.product.image_url} alt={it.product.title} />
+                      <SmartImage
+                        src={it.product.image_url}
+                        alt={it.product.title}
+                        variant="compact"
+                        wrapperClassName="cart-item__thumb"
+                      />
                       <div className="cart-item__info">
                         <div className="cart-item__sku">{it.product.sku} · Talla {it.size}</div>
                         <div className="cart-item__title">{it.product.title}</div>

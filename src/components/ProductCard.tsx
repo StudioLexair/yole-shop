@@ -3,6 +3,7 @@ import { Eye, Heart, Images, MessageCircle, ShoppingBag } from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
 import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
 import { getAvailableSizes } from '../lib/catalog';
+import { SmartImage } from './SmartImage';
 
 interface ProductCardProps {
   product: Product;
@@ -34,11 +35,14 @@ export function ProductCard({
   const altPhoto = product.extra_images?.[0] || '';
   const totalPhotos = 1 + (product.extra_images?.length || 0);
   const [showAltOnTouch, setShowAltOnTouch] = useState(false);
+  const [loadAlt, setLoadAlt] = useState(false);
+  const [altReady, setAltReady] = useState(false);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const swipedRef = useRef(false);
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!altPhoto) return;
+    setLoadAlt(true);
     const t = e.touches[0];
     if (t) {
       swipeStartRef.current = { x: t.clientX, y: t.clientY };
@@ -66,6 +70,9 @@ export function ProductCard({
     <article className={`p-card${isSoldOut ? ' is-sold-out' : ''}${showAltOnTouch ? ' is-alt-active' : ''}`}>
       <div
         className="p-card__media"
+        onMouseEnter={() => {
+          if (altPhoto) setLoadAlt(true);
+        }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onClick={() => {
@@ -78,20 +85,23 @@ export function ProductCard({
           if (e.key === 'Enter') onSelect(product);
         }}
       >
-        <img
+        <SmartImage
           src={product.image_url}
           alt={product.title}
           loading="lazy"
           decoding="async"
+          variant="card"
+          showRetryOnError
           className="p-card__img-main"
         />
-        {altPhoto && (
+        {altPhoto && loadAlt && (
           <img
             src={altPhoto}
             alt={`${product.title} vista alternativa`}
             loading="lazy"
             decoding="async"
-            className="p-card__img-alt"
+            onLoad={() => setAltReady(true)}
+            className={`p-card__img-alt${altReady ? ' is-ready' : ''}`}
           />
         )}
         <div className="p-card__badges">

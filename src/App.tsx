@@ -49,6 +49,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { SplashLoader } from './components/SplashLoader';
 import { FloatingCartButton } from './components/FloatingCartButton';
 import { BottomMenuSheet } from './components/BottomMenuSheet';
+import { SmartImage } from './components/SmartImage';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -654,7 +655,12 @@ export function App() {
               className={`col-banner${department === 'calzado' ? ' is-selected' : ''}`}
               onClick={() => handleSelectDept('calzado')}
             >
-              <img src={bannerImg('YOL-029', 'calzado')} alt="Calzado y Tenis" />
+              <SmartImage
+                src={bannerImg('YOL-029', 'calzado')}
+                alt="Calzado y Tenis"
+                loading="eager"
+                variant="banner"
+              />
               <div className="col-banner__overlay">
                 <span className="col-banner__tag">Calidades 3A &amp; G5</span>
                 <strong>Tenis &amp; Calzado ({deptCounts.calzado})</strong>
@@ -669,7 +675,12 @@ export function App() {
               className={`col-banner${department === 'moda_shein' ? ' is-selected' : ''}`}
               onClick={() => handleSelectDept('moda_shein')}
             >
-              <img src={bannerImg('YOL-122', 'moda_shein')} alt="Moda Shein Mujer y Hombre" />
+              <SmartImage
+                src={bannerImg('YOL-122', 'moda_shein')}
+                alt="Moda Shein Mujer y Hombre"
+                loading="eager"
+                variant="banner"
+              />
               <div className="col-banner__overlay">
                 <span className="col-banner__tag">Mujer &amp; Hombre</span>
                 <strong>Moda Shein ({deptCounts.moda_shein + deptCounts.hombre})</strong>
@@ -684,9 +695,11 @@ export function App() {
               className={`col-banner${department === 'accesorios' ? ' is-selected' : ''}`}
               onClick={() => handleSelectDept('accesorios')}
             >
-              <img
+              <SmartImage
                 src={bannerImg('YOL-165', 'accesorios')}
                 alt="Accesorios"
+                loading="eager"
+                variant="banner"
                 style={{ objectPosition: 'center 72%' }}
               />
               <div className="col-banner__overlay">
@@ -943,7 +956,12 @@ export function App() {
                       onClick={() => openProductModal(tp)}
                     >
                       <div className="top-mini-card__media">
-                        <img src={tp.image_url} alt={tp.title} loading="lazy" />
+                        <SmartImage
+                          src={tp.image_url}
+                          alt={tp.title}
+                          loading="lazy"
+                          variant="card"
+                        />
                         <span className="p-badge p-badge--feat">TOP</span>
                       </div>
                       <div className="top-mini-card__body">
@@ -979,10 +997,16 @@ export function App() {
                     className="recent-card"
                     onClick={() => openProductModal(rp)}
                   >
-                    <img src={rp.image_url} alt={rp.title} loading="lazy" />
-                    <div>
+                    <SmartImage
+                      src={rp.image_url}
+                      alt={rp.title}
+                      loading="lazy"
+                      variant="compact"
+                      wrapperClassName="recent-card__thumb"
+                    />
+                    <div className="recent-card__meta">
                       <small>{rp.sku}</small>
-                      <span>{rp.title}</span>
+                      <span className="recent-card__title">{rp.title}</span>
                     </div>
                   </button>
                 ))}
