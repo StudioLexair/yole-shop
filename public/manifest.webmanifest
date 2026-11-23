@@ -1,0 +1,17 @@
+{
+  "name": "Yole Shop",
+  "short_name": "Yole Shop",
+  "description": "Calzado Urbano, Moda Shein y Accesorios directo por WhatsApp",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf7f2",
+  "theme_color": "#111115",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
