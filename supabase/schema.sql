@@ -103,7 +103,7 @@ INSERT INTO public.categories (id, name, department, sort_order) VALUES
   ('conjuntos-mujer', 'Conjuntos & Faldas', 'moda_shein', 110),
   ('enterizos-leggings', 'Enterizos & Leggings', 'moda_shein', 120),
   ('moda-hombre', 'Moda Hombre', 'hombre', 130),
-  ('bolsos-relojes', 'Carteras & Relojes', 'accesorios', 140)
+  ('bolsos-relojes', 'Accesorios', 'accesorios', 140)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   department = EXCLUDED.department,

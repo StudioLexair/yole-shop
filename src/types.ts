@@ -124,5 +124,5 @@ export const DEPARTMENT_LABELS: Record<Department, string> = {
   calzado: 'Calzado & Tenis',
   moda_shein: 'Moda Shein',
   hombre: 'Hombre',
-  accesorios: 'Carteras & Relojes',
+  accesorios: 'Accesorios',
 };

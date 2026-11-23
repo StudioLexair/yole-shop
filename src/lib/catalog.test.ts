@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { filterProducts, collectAvailableSizes, makePresetSlug } from './catalog';
-import type { Product } from '../types';
+import { describe, expect, it, beforeEach } from 'vitest';
+import {
+  filterProducts,
+  collectAvailableSizes,
+  makePresetSlug,
+  readCachedStoreData,
+  writeCachedStoreData,
+} from './catalog';
+import { DEFAULT_SETTINGS, type Product } from '../types';
 
 const items: Product[] = [
   {
@@ -151,5 +157,23 @@ describe('catalog filters', () => {
       980
     );
     expect(res.map((p) => p.sku)).toEqual(['YOL-120', 'YOL-197']);
+  });
+});
+
+describe('offline-first catalog cache', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('guarda y recupera catálogo en localStorage silenciosamente', () => {
+    expect(readCachedStoreData()).toBeNull();
+    writeCachedStoreData({
+      settings: DEFAULT_SETTINGS,
+      categories: [{ id: 'bolsos-relojes', name: 'Accesorios', department: 'accesorios', sort_order: 50 }],
+      products: items,
+    });
+    const restored = readCachedStoreData();
+    expect(restored?.products).toHaveLength(3);
+    expect(restored?.categories[0]?.name).toBe('Accesorios');
   });
 });

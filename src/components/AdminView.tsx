@@ -1261,7 +1261,7 @@ export function AdminView({
                     ['calzado', 'Calzado'],
                     ['moda_shein', 'Moda Shein'],
                     ['hombre', 'Hombre'],
-                    ['accesorios', 'Carteras/Relojes'],
+                    ['accesorios', 'Accesorios'],
                     ['sold_out', 'Agotados'],
                     ['hidden', 'Ocultos'],
                   ] as Array<[QuickFilter, string]>

@@ -108,6 +108,43 @@ export function filterProducts(
   return sorted;
 }
 
+export interface CachedStorePayload {
+  settings: StoreSettings;
+  categories: Category[];
+  products: Product[];
+  pricePresets?: PricePreset[];
+  updatedAt?: number;
+}
+
+const CATALOG_CACHE_KEY = 'yole_shop_catalog_cache_v1';
+
+export function readCachedStoreData(): CachedStorePayload | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(CATALOG_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedStorePayload;
+    if (!parsed || !Array.isArray(parsed.products) || parsed.products.length === 0) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedStoreData(payload: CachedStorePayload): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      CATALOG_CACHE_KEY,
+      JSON.stringify({ ...payload, updatedAt: Date.now() })
+    );
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
 export async function fetchStoreData(): Promise<{
   settings: StoreSettings;
   categories: Category[];

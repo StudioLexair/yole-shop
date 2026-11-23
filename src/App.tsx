@@ -1,8 +1,10 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Download,
   Lock,
   MapPin,
+  Menu,
   MessageCircle,
   Search,
   ShoppingBag,
@@ -23,6 +25,8 @@ import {
   collectAvailableSizes,
   fetchStoreData,
   filterProducts,
+  readCachedStoreData,
+  writeCachedStoreData,
   type DepartmentFilter,
   type SortMode,
 } from './lib/catalog';
@@ -32,6 +36,13 @@ import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
 import { SplashLoader } from './components/SplashLoader';
+import { FloatingCartButton } from './components/FloatingCartButton';
+import { BottomMenuSheet } from './components/BottomMenuSheet';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
 
 const AdminView = lazy(() =>
   import('./components/AdminView').then((m) => ({ default: m.AdminView }))
@@ -49,16 +60,26 @@ function isAdminPath(): boolean {
 }
 
 export function App() {
-  const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [pricePresets, setPricePresets] = useState<PricePreset[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialCache = useMemo(() => readCachedStoreData(), []);
+
+  const [settings, setSettings] = useState<StoreSettings>(
+    () => initialCache?.settings || DEFAULT_SETTINGS
+  );
+  const [categories, setCategories] = useState<Category[]>(
+    () => initialCache?.categories || []
+  );
+  const [products, setProducts] = useState<Product[]>(
+    () => initialCache?.products || []
+  );
+  const [pricePresets, setPricePresets] = useState<PricePreset[]>(
+    () => initialCache?.pricePresets || []
+  );
+  const [loading, setLoading] = useState(() => !initialCache);
   const [minSplashDone, setMinSplashDone] = useState(
-    () => import.meta.env.MODE === 'test'
+    () => Boolean(initialCache) || import.meta.env.MODE === 'test'
   );
   const [splashMounted, setSplashMounted] = useState(
-    () => import.meta.env.MODE !== 'test'
+    () => !initialCache && import.meta.env.MODE !== 'test'
   );
   const [loadError, setLoadError] = useState('');
 
@@ -75,6 +96,15 @@ export function App() {
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.matchMedia?.('(display-mode: standalone)').matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+    );
+  });
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const raw = localStorage.getItem(CART_STORAGE_KEY);
@@ -104,25 +134,76 @@ export function App() {
   }, []);
 
   const refreshData = useCallback(async () => {
-    setLoadError('');
+    const hasLocalCatalog =
+      products.length > 0 || Boolean(readCachedStoreData()?.products?.length);
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setLoading(false);
+      return;
+    }
+
+    if (!hasLocalCatalog) {
+      setLoadError('');
+    }
+
     try {
       const data = await fetchStoreData();
       setSettings(data.settings);
       setCategories(data.categories);
       setProducts(data.products);
       setPricePresets(data.pricePresets || []);
+      setLoadError('');
+      if (import.meta.env.MODE !== 'test') {
+        writeCachedStoreData(data);
+      }
     } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : 'No se pudo conectar con el catálogo.'
-      );
+      // Offline-first silencioso: si ya tenemos caché local, mantenemos el catálogo sin mostrar carteles de error
+      if (!hasLocalCatalog) {
+        setLoadError(
+          err instanceof Error ? err.message : 'No se pudo conectar con el catálogo.'
+        );
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [products.length]);
 
   useEffect(() => {
     refreshData();
+  }, []);
+
+  useEffect(() => {
+    const onOnline = () => {
+      refreshData();
+    };
+    const onBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+    const onAppInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onAppInstalled);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
   }, [refreshData]);
+
+  const handleInstallApp = async (): Promise<'accepted' | 'dismissed' | 'unavailable'> => {
+    if (!installPrompt) return 'unavailable';
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+      setIsInstalled(true);
+    }
+    return outcome;
+  };
 
   useEffect(() => {
     if (import.meta.env.MODE === 'test') return;
@@ -406,6 +487,16 @@ export function App() {
               <span className="cart-btn__label">Carrito</span>
               {totalUnits > 0 && <span className="cart-badge">{totalUnits}</span>}
             </button>
+
+            <button
+              type="button"
+              className="menu-trigger-btn"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Abrir menú"
+              title="Menú e instalar app"
+            >
+              <Menu size={18} />
+            </button>
           </div>
         </div>
       </header>
@@ -418,15 +509,27 @@ export function App() {
               <h1>{settings.store_name}</h1>
               <p>{settings.hero_title}</p>
             </div>
-            <a
-              href={directWaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn--whatsapp btn--sm"
-            >
-              <MessageCircle size={16} />
-              <span>WhatsApp directo</span>
-            </a>
+            <div className="hero-headline-actions">
+              {installPrompt && !isInstalled && (
+                <button
+                  type="button"
+                  className="btn btn--outline-dark btn--sm"
+                  onClick={handleInstallApp}
+                >
+                  <Download size={15} />
+                  <span>Instalar App</span>
+                </button>
+              )}
+              <a
+                href={directWaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn--whatsapp btn--sm"
+              >
+                <MessageCircle size={16} />
+                <span>WhatsApp directo</span>
+              </a>
+            </div>
           </div>
 
           <div className="banners-grid">
@@ -465,10 +568,14 @@ export function App() {
               className={`col-banner${department === 'accesorios' ? ' is-selected' : ''}`}
               onClick={() => handleSelectDept('accesorios')}
             >
-              <img src={bannerImg('YOL-165', 'accesorios')} alt="Carteras y Relojes" />
+              <img
+                src={bannerImg('YOL-165', 'accesorios')}
+                alt="Accesorios"
+                style={{ objectPosition: 'center 72%' }}
+              />
               <div className="col-banner__overlay">
-                <span className="col-banner__tag">Bolsos &amp; Relojes</span>
-                <strong>Carteras &amp; Relojes ({deptCounts.accesorios})</strong>
+                <span className="col-banner__tag">Bolsos, Relojes &amp; Más</span>
+                <strong>Accesorios ({deptCounts.accesorios})</strong>
                 <span className="col-banner__cta">
                   Ver colección <ArrowRight size={14} />
                 </span>
@@ -758,6 +865,29 @@ export function App() {
         onUpdateQty={handleUpdateQty}
         onRemove={handleRemoveItem}
         onClear={() => setCart([])}
+      />
+
+      <FloatingCartButton
+        totalUnits={totalUnits}
+        onOpenCart={() => setCartOpen(true)}
+      />
+
+      <BottomMenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        settings={settings}
+        department={department}
+        sheinGender={sheinGender}
+        deptCounts={deptCounts}
+        displayCurrency={displayCurrency}
+        onSelectDept={handleSelectDept}
+        onSelectSheinGender={handleSelectSheinGender}
+        onChangeCurrency={setDisplayCurrency}
+        onOpenAdmin={() => navigateAdmin(true)}
+        directWaUrl={directWaUrl}
+        canPromptInstall={Boolean(installPrompt)}
+        isInstalled={isInstalled}
+        onInstallApp={handleInstallApp}
       />
     </div>
   );
