@@ -3,11 +3,13 @@ import type { Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
   Check,
+  Copy,
   Download,
   ImagePlus,
   Layers,
   Lock,
   LogOut,
+  MessageCircle,
   Package,
   Plus,
   RefreshCw,
@@ -36,6 +38,7 @@ import {
   calcYoleSheinPrice,
   formatCup,
   formatUsd,
+  formatWhatsAppOrderText,
   normalizeWhatsAppDigits,
 } from '../lib/pricing';
 import { formatKb, optimizeImageToWebP } from '../lib/imageOptimizer';
@@ -1752,16 +1755,89 @@ export function AdminView({
                         </strong>
                         {ord.notes && <span>Nota: {ord.notes}</span>}
                       </div>
-                      {ord.customer_phone && (
+                      <div className="order-card__actions">
+                        <button
+                          type="button"
+                          className="btn-outline"
+                          onClick={async () => {
+                            const transferFeeCup =
+                              ord.payment_method === 'transferencia'
+                                ? Math.round((ord.subtotal_cup * settings.transfer_surcharge_pct) / 100)
+                                : 0;
+                            const txt = formatWhatsAppOrderText({
+                              orderCode: ord.order_code,
+                              customerName: ord.customer_name,
+                              customerPhone: ord.customer_phone,
+                              deliveryType: ord.delivery_type,
+                              deliveryAddress: ord.delivery_address,
+                              paymentMethod: ord.payment_method,
+                              notes: ord.notes,
+                              items: ord.items,
+                              summary: {
+                                subtotalCup: ord.subtotal_cup,
+                                subtotalUsd: ord.subtotal_usd,
+                                deliveryFeeCup: ord.delivery_fee_cup,
+                                transferFeeCup,
+                                totalCupWithExtras:
+                                  ord.subtotal_cup + ord.delivery_fee_cup + transferFeeCup,
+                                hasUnpricedItems: ord.has_unpriced_items,
+                              },
+                              settings,
+                              includeManager: true,
+                            });
+                            try {
+                              await navigator.clipboard.writeText(txt);
+                              showToast(`Ficha ${ord.order_code} copiada (con Gestor: yolexsis)`);
+                            } catch {
+                              showToast('No se pudo copiar al portapapeles');
+                            }
+                          }}
+                        >
+                          <Copy size={14} /> Copiar ficha (Gestor)
+                        </button>
                         <a
-                          href={`https://wa.me/${normalizeWhatsAppDigits(ord.customer_phone)}`}
+                          href={`https://wa.me/?text=${encodeURIComponent(
+                            formatWhatsAppOrderText({
+                              orderCode: ord.order_code,
+                              customerName: ord.customer_name,
+                              customerPhone: ord.customer_phone,
+                              deliveryType: ord.delivery_type,
+                              deliveryAddress: ord.delivery_address,
+                              paymentMethod: ord.payment_method,
+                              notes: ord.notes,
+                              items: ord.items,
+                              summary: {
+                                subtotalCup: ord.subtotal_cup,
+                                subtotalUsd: ord.subtotal_usd,
+                                deliveryFeeCup: ord.delivery_fee_cup,
+                                transferFeeCup:
+                                  ord.payment_method === 'transferencia'
+                                    ? Math.round((ord.subtotal_cup * settings.transfer_surcharge_pct) / 100)
+                                    : 0,
+                                totalCupWithExtras: ord.subtotal_cup + ord.delivery_fee_cup,
+                                hasUnpricedItems: ord.has_unpriced_items,
+                              },
+                              settings,
+                              includeManager: true,
+                            })
+                          )}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn-outline"
                         >
-                          Escribir al cliente
+                          <MessageCircle size={14} /> Reenviar ficha
                         </a>
-                      )}
+                        {ord.customer_phone && (
+                          <a
+                            href={`https://wa.me/${normalizeWhatsAppDigits(ord.customer_phone)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-outline"
+                          >
+                            Escribir al cliente
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </article>
                 ))}

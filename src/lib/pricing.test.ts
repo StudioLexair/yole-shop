@@ -3,6 +3,7 @@ import {
   buildWhatsAppOrderLink,
   buildWhatsAppProductLink,
   calcYoleSheinPrice,
+  formatWhatsAppOrderText,
   getDisplayPrice,
   normalizeWhatsAppDigits,
   summarizeCart,
@@ -99,6 +100,7 @@ describe('pricing & WhatsApp helpers', () => {
 
     const pLink = buildWhatsAppProductLink(sampleShoe, '38', DEFAULT_SETTINGS);
     expect(pLink.startsWith('https://wa.me/5352678747?text=')).toBe(true);
+    expect(decodeURIComponent(pLink)).toContain('✨YoleShop✨');
 
     const oLink = buildWhatsAppOrderLink({
       orderCode: 'YOL-TEST',
@@ -107,12 +109,43 @@ describe('pricing & WhatsApp helpers', () => {
       deliveryType: 'domicilio',
       deliveryAddress: 'Calle 7ma',
       paymentMethod: 'efectivo',
+      deliveryTime: '3pm',
       notes: '',
       items: [{ product: sampleShoe, size: '38', qty: 1 }],
       summary,
       settings: DEFAULT_SETTINGS,
     });
-    expect(oLink).toContain('YOL-TEST');
-    expect(oLink).toContain('YOL-003');
+    const decodedOrder = decodeURIComponent(oLink);
+    expect(decodedOrder).toContain('✨YoleShop✨');
+    expect(decodedOrder).toContain('YOL-003');
+    expect(decodedOrder).toContain('moneda nacional 35000');
+    expect(decodedOrder).toContain('📍 Dirección: Calle 7ma');
+    expect(decodedOrder).toContain('👤 Nombre del cliente: Laura');
+    expect(decodedOrder).toContain('🕒 Hora de la entrega: 3pm');
+    expect(decodedOrder).not.toContain('Gestor');
+
+    const supplierText = formatWhatsAppOrderText({
+      orderCode: 'YOL-TEST',
+      customerName: 'Laura',
+      customerPhone: '+5351234567',
+      deliveryType: 'domicilio',
+      deliveryAddress: 'Calle 7ma',
+      paymentMethod: 'efectivo',
+      notes: '',
+      items: [
+        {
+          sku: 'YOL-003',
+          title: 'New Balance 9060 Blanco & Rosa',
+          size: '38',
+          qty: 1,
+          currency: 'CUP',
+          unit_price: 35000,
+        },
+      ],
+      summary,
+      settings: DEFAULT_SETTINGS,
+      includeManager: true,
+    });
+    expect(supplierText).toContain('🙋🏼‍♀️Gestor: yolexsis');
   });
 });

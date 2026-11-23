@@ -30,6 +30,7 @@ import { SUPABASE_URL, STORAGE_BUCKET } from './lib/supabase';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
+import { SplashLoader } from './components/SplashLoader';
 
 const AdminView = lazy(() =>
   import('./components/AdminView').then((m) => ({ default: m.AdminView }))
@@ -52,6 +53,12 @@ export function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [pricePresets, setPricePresets] = useState<PricePreset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [minSplashDone, setMinSplashDone] = useState(
+    () => import.meta.env.MODE === 'test'
+  );
+  const [splashMounted, setSplashMounted] = useState(
+    () => import.meta.env.MODE !== 'test'
+  );
   const [loadError, setLoadError] = useState('');
 
   const [isAdmin, setIsAdmin] = useState<boolean>(isAdminPath);
@@ -114,6 +121,19 @@ export function App() {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  useEffect(() => {
+    if (import.meta.env.MODE === 'test') return;
+    const t = setTimeout(() => setMinSplashDone(true), 750);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!loading && minSplashDone) {
+      const t = setTimeout(() => setSplashMounted(false), 380);
+      return () => clearTimeout(t);
+    }
+  }, [loading, minSplashDone]);
 
   const navigateAdmin = (enter: boolean) => {
     if (enter) {
@@ -243,13 +263,7 @@ export function App() {
 
   if (isAdmin) {
     return (
-      <Suspense
-        fallback={
-          <div className="admin-login-page">
-            <div className="admin-login-card">Cargando panel...</div>
-          </div>
-        }
-      >
+      <Suspense fallback={<SplashLoader visible label="Cargando panel administrador..." />}>
         <AdminView
           settings={settings}
           categories={categories}
@@ -264,6 +278,12 @@ export function App() {
 
   return (
     <div className="app-shell">
+      {splashMounted && (
+        <SplashLoader
+          visible={loading || !minSplashDone}
+          label={loading ? 'Cargando catálogo...' : 'Colección lista'}
+        />
+      )}
       {/* Top Bar */}
       <div className="promo-strip">
         <div className="container promo-strip__inner">

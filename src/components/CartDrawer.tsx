@@ -38,6 +38,7 @@ export function CartDrawer({
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('domicilio');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryTime, setDeliveryTime] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
   const [notes, setNotes] = useState('');
   const [sending, setSending] = useState(false);
@@ -69,11 +70,19 @@ export function CartDrawer({
       deliveryType,
       deliveryAddress,
       paymentMethod,
+      deliveryTime,
       notes,
       items,
       summary,
       settings,
     });
+
+    const savedNotes = [
+      deliveryTime.trim() ? `Hora: ${deliveryTime.trim()}` : '',
+      notes.trim(),
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
     setSending(true);
     try {
@@ -96,7 +105,7 @@ export function CartDrawer({
         subtotal_usd: summary.subtotalUsd,
         delivery_fee_cup: summary.deliveryFeeCup,
         has_unpriced_items: summary.hasUnpricedItems,
-        notes: notes.trim(),
+        notes: savedNotes,
       });
     } catch {
       // No bloqueamos el pedido por WhatsApp si hay intermitencia de red
@@ -288,6 +297,16 @@ export function CartDrawer({
                     </button>
                   </div>
                 </div>
+
+                <label className="field">
+                  <span>Hora de entrega preferida (opcional)</span>
+                  <input
+                    type="text"
+                    placeholder="Ej. Hoy en la tarde, después de las 3pm..."
+                    value={deliveryTime}
+                    onChange={(e) => setDeliveryTime(e.target.value)}
+                  />
+                </label>
 
                 <label className="field">
                   <span>Nota adicional (opcional)</span>
