@@ -7,7 +7,6 @@ import {
   Search,
   ShoppingBag,
   SlidersHorizontal,
-  Sparkles,
   X,
 } from 'lucide-react';
 import type {
@@ -26,6 +25,7 @@ import {
   type SortMode,
 } from './lib/catalog';
 import { formatCup, normalizeWhatsAppDigits } from './lib/pricing';
+import { SUPABASE_URL, STORAGE_BUCKET } from './lib/supabase';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -232,9 +232,21 @@ export function App() {
     `Hola ${settings.store_name}, quiero consultar sobre los productos del catálogo.`
   )}`;
 
+  // Banners visuales directos con imágenes reales del catálogo
+  const bannerImg = (sku: string, fallbackDept: Department) =>
+    products.find((p) => p.sku === sku)?.image_url ||
+    products.find((p) => p.department === fallbackDept)?.image_url ||
+    `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/catalog/${sku}.webp`;
+
   if (isAdmin) {
     return (
-      <Suspense fallback={<div className="admin-login-page"><div className="admin-login-card">Cargando panel...</div></div>}>
+      <Suspense
+        fallback={
+          <div className="admin-login-page">
+            <div className="admin-login-card">Cargando panel...</div>
+          </div>
+        }
+      >
         <AdminView
           settings={settings}
           categories={categories}
@@ -248,11 +260,11 @@ export function App() {
 
   return (
     <div className="app-shell">
-      {/* Top Announcement */}
+      {/* Top Bar */}
       <div className="promo-strip">
         <div className="container promo-strip__inner">
           <span>
-            <MapPin size={13} /> {settings.location_text}
+            <MapPin size={12} /> {settings.location_text}
           </span>
           <span className="promo-strip__sep">·</span>
           <span>Domicilio base {formatCup(settings.delivery_fee_cup)}</span>
@@ -274,8 +286,8 @@ export function App() {
           >
             <span className="brand-monogram">YS</span>
             <div>
-              <strong>{settings.store_name}</strong>
-              <small>Calzado &amp; Moda Shein</small>
+              <strong>{settings.store_name.toUpperCase()}</strong>
+              <small>Calzado &amp; Moda</small>
             </div>
           </a>
 
@@ -323,7 +335,7 @@ export function App() {
               onClick={() => setCartOpen(true)}
               aria-label="Abrir carrito"
             >
-              <ShoppingBag size={18} />
+              <ShoppingBag size={17} />
               <span className="cart-btn__label">Carrito</span>
               {totalUnits > 0 && <span className="cart-badge">{totalUnits}</span>}
             </button>
@@ -331,67 +343,70 @@ export function App() {
         </div>
       </header>
 
-      {/* Hero Showcase */}
-      <section className="hero">
-        <div className="container hero-grid">
-          <div className="hero-copy">
-            <div className="hero-pill">
-              <Sparkles size={14} />
-              <span>{settings.hero_badge}</span>
+      {/* Compact Editorial Category Banners — directo al producto */}
+      <section className="hero-compact" aria-label="Colecciones principales">
+        <div className="container">
+          <div className="hero-headline-row">
+            <div>
+              <h1>{settings.store_name}</h1>
+              <p>{settings.hero_title}</p>
             </div>
-            <h1>{settings.hero_title}</h1>
-            <p>{settings.hero_subtitle}</p>
-            <div className="hero-ctas">
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => {
-                  handleSelectDept('calzado');
-                  document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-              >
-                <span>Ver Tenis ({deptCounts.calzado})</span>
-                <ArrowRight size={17} />
-              </button>
-              <button
-                type="button"
-                className="btn btn--gold-outline"
-                onClick={() => {
-                  handleSelectDept('moda_shein');
-                  document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-              >
-                <span>Moda Shein ({deptCounts.moda_shein})</span>
-              </button>
-              <a
-                href={directWaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn--whatsapp"
-              >
-                <MessageCircle size={17} />
-                <span>WhatsApp</span>
-              </a>
-            </div>
+            <a
+              href={directWaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn--whatsapp btn--sm"
+            >
+              <MessageCircle size={16} />
+              <span>WhatsApp directo</span>
+            </a>
           </div>
 
-          <div className="hero-stats-card">
-            <div className="hero-stat">
-              <strong>{deptCounts.all}</strong>
-              <span>Productos disponibles</span>
-            </div>
-            <div className="hero-stat">
-              <strong>3A · G5</strong>
-              <span>Calzado verificado por talla</span>
-            </div>
-            <div className="hero-stat">
-              <strong>SHEIN</strong>
-              <span>Vestidos, tops, sets y hombre</span>
-            </div>
-            <div className="hero-stat">
-              <strong>Directo</strong>
-              <span>Atención inmediata por WhatsApp</span>
-            </div>
+          <div className="banners-grid">
+            <button
+              type="button"
+              className={`col-banner${department === 'calzado' ? ' is-selected' : ''}`}
+              onClick={() => handleSelectDept('calzado')}
+            >
+              <img src={bannerImg('YOL-029', 'calzado')} alt="Calzado y Tenis" />
+              <div className="col-banner__overlay">
+                <span className="col-banner__tag">Calidades 3A &amp; G5</span>
+                <strong>Tenis &amp; Calzado ({deptCounts.calzado})</strong>
+                <span className="col-banner__cta">
+                  Ver tallas <ArrowRight size={14} />
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className={`col-banner${department === 'moda_shein' ? ' is-selected' : ''}`}
+              onClick={() => handleSelectDept('moda_shein')}
+            >
+              <img src={bannerImg('YOL-122', 'moda_shein')} alt="Moda Shein" />
+              <div className="col-banner__overlay">
+                <span className="col-banner__tag">Nueva Colección</span>
+                <strong>Moda Shein ({deptCounts.moda_shein})</strong>
+                <span className="col-banner__cta">
+                  Explorar <ArrowRight size={14} />
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className={`col-banner${department === 'hombre' ? ' is-selected' : ''}`}
+              onClick={() => handleSelectDept('hombre')}
+            >
+              <img src={bannerImg('YOL-197', 'hombre')} alt="Moda Hombre y Relojes" />
+              <div className="col-banner__overlay">
+                <span className="col-banner__tag">Hoodies &amp; Streetwear</span>
+                <strong>Moda Hombre ({deptCounts.hombre})</strong>
+                <span className="col-banner__cta">
+                  Ver colección <ArrowRight size={14} />
+                </span>
+              </div>
+            </button>
           </div>
         </div>
       </section>
@@ -400,7 +415,7 @@ export function App() {
       <main id="catalogo" className="container catalog-section">
         <div className="filters-bar">
           <div className="search-input-wrap">
-            <Search size={18} />
+            <Search size={17} />
             <input
               type="search"
               placeholder="Buscar modelo, marca (Jordan, NB, Nike, Shein) o código YOL-..."
@@ -417,7 +432,7 @@ export function App() {
                 aria-label="Limpiar búsqueda"
                 onClick={() => setSearch('')}
               >
-                <X size={15} />
+                <X size={14} />
               </button>
             )}
           </div>
@@ -510,7 +525,11 @@ export function App() {
             Mostrando <strong>{visibleProducts.length}</strong> de{' '}
             <strong>{filteredProducts.length}</strong> artículos
           </span>
-          {(department !== 'all' || categoryId !== 'all' || sizeFilter !== 'all' || search || onlyPriced) && (
+          {(department !== 'all' ||
+            categoryId !== 'all' ||
+            sizeFilter !== 'all' ||
+            search ||
+            onlyPriced) && (
             <button
               type="button"
               className="btn-link"
@@ -572,7 +591,7 @@ export function App() {
               <div className="load-more-wrap">
                 <button
                   type="button"
-                  className="btn btn--gold-outline"
+                  className="btn btn--outline-dark"
                   onClick={() => setVisibleLimit((n) => n + PAGE_STEP)}
                 >
                   Cargar más ({filteredProducts.length - visibleProducts.length} restantes)
@@ -587,7 +606,7 @@ export function App() {
       <footer className="site-footer">
         <div className="container footer-inner">
           <div>
-            <strong>{settings.store_name}</strong>
+            <strong>{settings.store_name.toUpperCase()}</strong>
             <p>{settings.tagline}</p>
             <p className="footer-policy">{settings.no_returns_notice}</p>
           </div>
@@ -613,7 +632,6 @@ export function App() {
         </div>
       </footer>
 
-      {/* Floating WhatsApp & Toast */}
       {addedToast && (
         <div className="shop-toast" role="status" onClick={() => setCartOpen(true)}>
           <ShoppingBag size={16} />

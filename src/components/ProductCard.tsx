@@ -24,7 +24,15 @@ export function ProductCard({
 
   return (
     <article className={`p-card${isSoldOut ? ' is-sold-out' : ''}`}>
-      <div className="p-card__media" onClick={() => onSelect(product)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(product); }}>
+      <div
+        className="p-card__media"
+        onClick={() => onSelect(product)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSelect(product);
+        }}
+      >
         <img
           src={product.image_url}
           alt={product.title}
@@ -32,16 +40,15 @@ export function ProductCard({
           decoding="async"
         />
         <div className="p-card__badges">
-          <span className="p-badge p-badge--sku">{product.sku}</span>
           {product.quality && (
-            <span className={`p-badge p-badge--qual${product.quality === 'G5' ? ' is-gold' : ''}`}>
+            <span className={`p-badge p-badge--qual${product.quality === 'G5' ? ' is-g5' : ''}`}>
               {product.quality}
             </span>
           )}
+          {product.featured && !isSoldOut && (
+            <span className="p-badge p-badge--feat">TOP</span>
+          )}
         </div>
-        {product.featured && !isSoldOut && (
-          <span className="p-badge p-badge--feat">Top</span>
-        )}
         {isSoldOut && <span className="p-soldout-ribbon">Agotado</span>}
         <button
           type="button"
@@ -52,12 +59,16 @@ export function ProductCard({
             onSelect(product);
           }}
         >
-          <Eye size={16} />
+          <Eye size={15} />
         </button>
       </div>
 
       <div className="p-card__body">
-        <div className="p-card__brand">{product.brand}</div>
+        <div className="p-card__meta-line">
+          <span className="p-card__brand">{product.brand}</span>
+          <span className="p-card__sku">{product.sku}</span>
+        </div>
+
         <h3 className="p-card__title" onClick={() => onSelect(product)}>
           {product.title}
         </h3>
@@ -100,7 +111,7 @@ export function ProductCard({
                 else onQuickAdd(product, defaultSize);
               }}
             >
-              <ShoppingBag size={16} />
+              <ShoppingBag size={15} />
               <span>{product.sizes.length > 1 ? 'Talla' : 'Agregar'}</span>
             </button>
             <a
@@ -111,7 +122,7 @@ export function ProductCard({
               aria-label={`Consultar ${product.title} por WhatsApp`}
               title="Pedir por WhatsApp"
             >
-              <MessageCircle size={16} />
+              <MessageCircle size={15} />
             </a>
           </div>
         </div>
