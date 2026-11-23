@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS, type Category, type Product } from './types';
 const mockCategories: Category[] = [
   { id: 'tenis-new-balance', name: 'New Balance', department: 'calzado', sort_order: 10 },
   { id: 'vestidos-shein', name: 'Vestidos Shein', department: 'moda_shein', sort_order: 20 },
+  { id: 'moda-hombre', name: 'Moda Hombre', department: 'hombre', sort_order: 30 },
 ];
 
 const mockProducts: Product[] = [
@@ -49,6 +50,26 @@ const mockProducts: Product[] = [
     source_group: 'shein_moda',
     sort_order: 20,
   },
+  {
+    id: 'p3',
+    sku: 'YOL-197',
+    title: 'Sudadera Hoodie Café Osito Bordado',
+    brand: 'SHEIN',
+    department: 'hombre',
+    category_id: 'moda-hombre',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: null,
+    price: 38,
+    sizes: ['M', 'L'],
+    fit_note: '',
+    image_url: 'https://example.com/hombre.webp',
+    image_path: 'catalog/YOL-197.webp',
+    status: 'active',
+    featured: false,
+    source_group: 'shein_moda',
+    sort_order: 30,
+  },
 ];
 
 vi.mock('./lib/catalog', async () => {
@@ -89,5 +110,15 @@ describe('Yole Shop App', () => {
     expect(screen.getByText('Tu Pedido (1)')).toBeInTheDocument();
     expect(screen.getByText(/YOL-003 · Talla 38/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enviar pedido a WhatsApp' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar carrito' }));
+
+    // Filtra Moda Shein -> muestra Mujer y Hombre juntos y permite elegir Hombre dentro
+    fireEvent.click(screen.getByRole('button', { name: /Moda Shein 2/i }));
+    expect(screen.getByText('Vestido Corto Satén Chocolate')).toBeInTheDocument();
+    expect(screen.getByText('Sudadera Hoodie Café Osito Bordado')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Hombre \(1\)/i }));
+    expect(screen.queryByText('Vestido Corto Satén Chocolate')).not.toBeInTheDocument();
+    expect(screen.getByText('Sudadera Hoodie Café Osito Bordado')).toBeInTheDocument();
   });
 });

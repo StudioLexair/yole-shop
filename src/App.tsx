@@ -23,6 +23,7 @@ import {
   collectAvailableSizes,
   fetchStoreData,
   filterProducts,
+  type DepartmentFilter,
   type SortMode,
 } from './lib/catalog';
 import { formatCup, normalizeWhatsAppDigits } from './lib/pricing';
@@ -63,6 +64,7 @@ export function App() {
 
   const [isAdmin, setIsAdmin] = useState<boolean>(isAdminPath);
   const [department, setDepartment] = useState<Department | 'all'>('all');
+  const [sheinGender, setSheinGender] = useState<'all' | 'mujer' | 'hombre'>('all');
   const [categoryId, setCategoryId] = useState<string>('all');
   const [sizeFilter, setSizeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -157,20 +159,40 @@ export function App() {
     return counts;
   }, [products, settings.show_sold_out_public]);
 
+  const activeDeptFilter: DepartmentFilter = useMemo(() => {
+    if (department === 'moda_shein') {
+      if (sheinGender === 'mujer') return 'moda_shein';
+      if (sheinGender === 'hombre') return 'hombre';
+      return 'shein_all';
+    }
+    return department;
+  }, [department, sheinGender]);
+
   const visibleCategories = useMemo(() => {
     if (department === 'all') return categories;
+    if (department === 'moda_shein') {
+      if (sheinGender === 'mujer') return categories.filter((c) => c.department === 'moda_shein');
+      if (sheinGender === 'hombre') return categories.filter((c) => c.department === 'hombre');
+      return categories.filter(
+        (c) => c.department === 'moda_shein' || c.department === 'hombre'
+      );
+    }
     return categories.filter((c) => c.department === department);
-  }, [categories, department]);
+  }, [categories, department, sheinGender]);
 
   const deptScopedProducts = useMemo(() => {
-    return products.filter(
-      (p) =>
-        p.status !== 'hidden' &&
-        (settings.show_sold_out_public || p.status !== 'sold_out') &&
-        (department === 'all' || p.department === department) &&
-        (categoryId === 'all' || p.category_id === categoryId)
-    );
-  }, [products, settings.show_sold_out_public, department, categoryId]);
+    return products.filter((p) => {
+      if (p.status === 'hidden') return false;
+      if (!settings.show_sold_out_public && p.status === 'sold_out') return false;
+      if (activeDeptFilter === 'shein_all') {
+        if (p.department !== 'moda_shein' && p.department !== 'hombre') return false;
+      } else if (activeDeptFilter !== 'all' && p.department !== activeDeptFilter) {
+        return false;
+      }
+      if (categoryId !== 'all' && p.category_id !== categoryId) return false;
+      return true;
+    });
+  }, [products, settings.show_sold_out_public, activeDeptFilter, categoryId]);
 
   const availableSizes = useMemo(
     () => collectAvailableSizes(deptScopedProducts),
@@ -182,7 +204,7 @@ export function App() {
       filterProducts(
         products,
         {
-          department,
+          department: activeDeptFilter,
           categoryId,
           size: sizeFilter,
           search,
@@ -194,7 +216,7 @@ export function App() {
       ),
     [
       products,
-      department,
+      activeDeptFilter,
       categoryId,
       sizeFilter,
       search,
@@ -212,6 +234,14 @@ export function App() {
 
   const handleSelectDept = (nextDept: Department | 'all') => {
     setDepartment(nextDept);
+    setSheinGender('all');
+    setCategoryId('all');
+    setSizeFilter('all');
+    setVisibleLimit(PAGE_STEP);
+  };
+
+  const handleSelectSheinGender = (nextGender: 'all' | 'mujer' | 'hombre') => {
+    setSheinGender(nextGender);
     setCategoryId('all');
     setSizeFilter('all');
     setVisibleLimit(PAGE_STEP);
@@ -323,16 +353,29 @@ export function App() {
             >
               Todo <span className="nav-count">{deptCounts.all}</span>
             </button>
-            {(Object.keys(DEPARTMENT_LABELS) as Department[]).map((dep) => (
-              <button
-                key={dep}
-                type="button"
-                className={department === dep ? 'is-active' : ''}
-                onClick={() => handleSelectDept(dep)}
-              >
-                {DEPARTMENT_LABELS[dep]} <span className="nav-count">{deptCounts[dep]}</span>
-              </button>
-            ))}
+            <button
+              type="button"
+              className={department === 'calzado' ? 'is-active' : ''}
+              onClick={() => handleSelectDept('calzado')}
+            >
+              {DEPARTMENT_LABELS.calzado} <span className="nav-count">{deptCounts.calzado}</span>
+            </button>
+            <button
+              type="button"
+              className={department === 'moda_shein' ? 'is-active' : ''}
+              onClick={() => handleSelectDept('moda_shein')}
+            >
+              {DEPARTMENT_LABELS.moda_shein}{' '}
+              <span className="nav-count">{deptCounts.moda_shein + deptCounts.hombre}</span>
+            </button>
+            <button
+              type="button"
+              className={department === 'accesorios' ? 'is-active' : ''}
+              onClick={() => handleSelectDept('accesorios')}
+            >
+              {DEPARTMENT_LABELS.accesorios}{' '}
+              <span className="nav-count">{deptCounts.accesorios}</span>
+            </button>
           </nav>
 
           <div className="header-actions">
@@ -407,10 +450,10 @@ export function App() {
               className={`col-banner${department === 'moda_shein' ? ' is-selected' : ''}`}
               onClick={() => handleSelectDept('moda_shein')}
             >
-              <img src={bannerImg('YOL-122', 'moda_shein')} alt="Moda Shein" />
+              <img src={bannerImg('YOL-122', 'moda_shein')} alt="Moda Shein Mujer y Hombre" />
               <div className="col-banner__overlay">
-                <span className="col-banner__tag">Nueva Colección</span>
-                <strong>Moda Shein ({deptCounts.moda_shein})</strong>
+                <span className="col-banner__tag">Mujer &amp; Hombre</span>
+                <strong>Moda Shein ({deptCounts.moda_shein + deptCounts.hombre})</strong>
                 <span className="col-banner__cta">
                   Explorar <ArrowRight size={14} />
                 </span>
@@ -419,13 +462,13 @@ export function App() {
 
             <button
               type="button"
-              className={`col-banner${department === 'hombre' ? ' is-selected' : ''}`}
-              onClick={() => handleSelectDept('hombre')}
+              className={`col-banner${department === 'accesorios' ? ' is-selected' : ''}`}
+              onClick={() => handleSelectDept('accesorios')}
             >
-              <img src={bannerImg('YOL-197', 'hombre')} alt="Moda Hombre y Relojes" />
+              <img src={bannerImg('YOL-165', 'accesorios')} alt="Carteras y Relojes" />
               <div className="col-banner__overlay">
-                <span className="col-banner__tag">Hoodies &amp; Streetwear</span>
-                <strong>Moda Hombre ({deptCounts.hombre})</strong>
+                <span className="col-banner__tag">Bolsos &amp; Relojes</span>
+                <strong>Carteras &amp; Relojes ({deptCounts.accesorios})</strong>
                 <span className="col-banner__cta">
                   Ver colección <ArrowRight size={14} />
                 </span>
@@ -486,6 +529,36 @@ export function App() {
             </div>
           </div>
         </div>
+
+        {/* Sub-filtro Mujer / Hombre dentro de Moda Shein */}
+        {department === 'moda_shein' && (
+          <div className="sizes-filter-row shein-gender-row" aria-label="Filtrar Moda Shein por género">
+            <span className="sizes-filter-label">Moda:</span>
+            <div className="chips-scroller chips-scroller--compact">
+              <button
+                type="button"
+                className={`chip${sheinGender === 'all' ? ' is-active' : ''}`}
+                onClick={() => handleSelectSheinGender('all')}
+              >
+                Todo ({deptCounts.moda_shein + deptCounts.hombre})
+              </button>
+              <button
+                type="button"
+                className={`chip${sheinGender === 'mujer' ? ' is-active' : ''}`}
+                onClick={() => handleSelectSheinGender('mujer')}
+              >
+                Mujer ({deptCounts.moda_shein})
+              </button>
+              <button
+                type="button"
+                className={`chip${sheinGender === 'hombre' ? ' is-active' : ''}`}
+                onClick={() => handleSelectSheinGender('hombre')}
+              >
+                Hombre ({deptCounts.hombre})
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Category Chips */}
         <div className="chips-scroller" aria-label="Categorías">
@@ -550,6 +623,7 @@ export function App() {
             <strong>{filteredProducts.length}</strong> artículos
           </span>
           {(department !== 'all' ||
+            sheinGender !== 'all' ||
             categoryId !== 'all' ||
             sizeFilter !== 'all' ||
             search ||
@@ -559,6 +633,7 @@ export function App() {
               className="btn-link"
               onClick={() => {
                 setDepartment('all');
+                setSheinGender('all');
                 setCategoryId('all');
                 setSizeFilter('all');
                 setSearch('');
@@ -587,6 +662,7 @@ export function App() {
               className="btn-outline"
               onClick={() => {
                 setDepartment('all');
+                setSheinGender('all');
                 setCategoryId('all');
                 setSizeFilter('all');
                 setSearch('');

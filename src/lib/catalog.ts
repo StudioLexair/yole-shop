@@ -15,8 +15,10 @@ import { priceInCup } from './pricing';
 
 export type SortMode = 'featured' | 'price_asc' | 'price_desc' | 'newest';
 
+export type DepartmentFilter = Department | 'all' | 'shein_all';
+
 export interface CatalogFilters {
-  department: Department | 'all';
+  department: DepartmentFilter;
   categoryId: string;
   size: string;
   search: string;
@@ -65,7 +67,11 @@ export function filterProducts(
   const filtered = products.filter((p) => {
     if (p.status === 'hidden') return false;
     if (!filters.includeSoldOut && p.status === 'sold_out') return false;
-    if (filters.department !== 'all' && p.department !== filters.department) return false;
+    if (filters.department === 'shein_all') {
+      if (p.department !== 'moda_shein' && p.department !== 'hombre') return false;
+    } else if (filters.department !== 'all' && p.department !== filters.department) {
+      return false;
+    }
     if (filters.categoryId !== 'all' && p.category_id !== filters.categoryId) return false;
     if (filters.size !== 'all' && !p.sizes.includes(filters.size)) return false;
     if (filters.onlyPriced && (p.price === null || !Number.isFinite(p.price))) return false;

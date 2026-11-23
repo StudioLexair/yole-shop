@@ -123,4 +123,33 @@ describe('catalog filters', () => {
     expect(makePresetSlug('Vestidos cortos (Mujer)')).toBe('vestidos-cortos-mujer');
     expect(makePresetSlug('Enguatadas de gorro · Niño')).toBe('enguatadas-de-gorro-nino');
   });
+
+  it('agrupa moda_shein y hombre bajo shein_all', () => {
+    const withMan: Product[] = [
+      ...items,
+      {
+        ...items[1],
+        id: 'd',
+        sku: 'YOL-197',
+        title: 'Sudadera Hoodie Café',
+        department: 'hombre',
+        category_id: 'moda-hombre',
+        sizes: ['M', 'L'],
+      },
+    ];
+    const res = filterProducts(
+      withMan,
+      {
+        department: 'shein_all',
+        categoryId: 'all',
+        size: 'all',
+        search: '',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980
+    );
+    expect(res.map((p) => p.sku)).toEqual(['YOL-120', 'YOL-197']);
+  });
 });
