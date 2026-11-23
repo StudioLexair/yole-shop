@@ -219,7 +219,7 @@ export function CartDrawer({
                 })}
               </div>
 
-              <form className="checkout-form" onSubmit={handleCheckout}>
+              <form id="yole-checkout-form" className="checkout-form" onSubmit={handleCheckout}>
                 <div className="checkout-summary">
                   {summary.subtotalCup > 0 && (
                     <div className="sum-row">
@@ -382,15 +382,30 @@ export function CartDrawer({
                     </button>
                   </div>
                 )}
-
-                <button type="submit" className="btn btn--whatsapp btn--block" disabled={sending}>
-                  <MessageCircle size={18} />
-                  <span>{sending ? 'Preparando pedido...' : 'Enviar pedido a WhatsApp'}</span>
-                </button>
               </form>
             </>
           )}
         </div>
+
+        {items.length > 0 && (
+          <footer className="drawer-footer">
+            {summary.totalCupWithExtras > 0 && (
+              <div className="drawer-footer__total">
+                <span>Total estimado</span>
+                <strong>{formatCup(summary.totalCupWithExtras)}</strong>
+              </div>
+            )}
+            <button
+              type="submit"
+              form="yole-checkout-form"
+              className="btn btn--whatsapp btn--block drawer-footer__cta"
+              disabled={sending}
+            >
+              <MessageCircle size={18} />
+              <span>{sending ? 'Preparando pedido...' : 'Enviar pedido a WhatsApp'}</span>
+            </button>
+          </footer>
+        )}
       </aside>
     </div>
   );

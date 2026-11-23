@@ -5,10 +5,12 @@ import {
   Download,
   Heart,
   Lock,
+  MapPin,
   MessageCircle,
   Moon,
   Smartphone,
   Sun,
+  Truck,
   X,
 } from 'lucide-react';
 import type { Currency, Department, StoreSettings } from '../types';
@@ -125,6 +127,16 @@ export function BottomMenuSheet({
         </header>
 
         <div className="sheet-body">
+          {/* Resumen tienda y envío */}
+          <div className="sheet-info-bar">
+            <span>
+              <MapPin size={13} /> {settings.location_text}
+            </span>
+            <span>
+              <Truck size={13} /> Domicilio base {formatCup(settings.delivery_fee_cup)}
+            </span>
+          </div>
+
           {/* Colecciones */}
           <div className="sheet-section">
             <span className="sheet-label">Explorar tienda</span>

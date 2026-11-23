@@ -122,7 +122,11 @@ describe('Yole Shop App', () => {
     expect(screen.getByText('Vestido Corto Satén Chocolate')).toBeInTheDocument();
     expect(screen.queryByText(/Carteras & Relojes/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'USD' }));
+    // Cambio de moneda vive dentro del panel de menú hamburguesa
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
+    const menuPanel = screen.getByRole('dialog', { name: 'Menú principal' });
+    fireEvent.click(within(menuPanel).getByRole('button', { name: 'USD' }));
+    fireEvent.click(within(menuPanel).getByRole('button', { name: 'Cerrar menú' }));
     expect(screen.getByText('$35.71 USD')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));

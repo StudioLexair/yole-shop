@@ -6,12 +6,12 @@ import {
   Flame,
   Heart,
   Lock,
-  MapPin,
   Menu,
   MessageCircle,
   Search,
   ShoppingBag,
   SlidersHorizontal,
+  Tag,
   X,
 } from 'lucide-react';
 import type {
@@ -41,7 +41,7 @@ import {
   type SortMode,
   type ThemeMode,
 } from './lib/catalog';
-import { buildWhatsAppUrl, formatCup, getDisplayPrice, normalizeWhatsAppDigits } from './lib/pricing';
+import { buildWhatsAppUrl, getDisplayPrice, normalizeWhatsAppDigits } from './lib/pricing';
 import { SUPABASE_URL, STORAGE_BUCKET } from './lib/supabase';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
@@ -512,20 +512,7 @@ export function App() {
           label={loading ? 'Cargando catálogo...' : 'Colección lista'}
         />
       )}
-      {/* Top Bar */}
-      <div className="promo-strip">
-        <div className="container promo-strip__inner">
-          <span>
-            <MapPin size={12} /> {settings.location_text}
-          </span>
-          <span className="promo-strip__sep">·</span>
-          <span>Domicilio base {formatCup(settings.delivery_fee_cup)}</span>
-          <span className="promo-strip__sep">·</span>
-          <span>1 USD = {formatCup(settings.usd_to_cup_rate)}</span>
-        </div>
-      </div>
-
-      {/* Main Header */}
+      {/* Main Header — una sola fila superior limpia */}
       <header className="site-header">
         <div className="container header-row">
           <a
@@ -577,23 +564,6 @@ export function App() {
           </nav>
 
           <div className="header-actions">
-            <div className="curr-toggle" role="group" aria-label="Moneda de visualización">
-              <button
-                type="button"
-                className={displayCurrency === 'CUP' ? 'is-active' : ''}
-                onClick={() => setDisplayCurrency('CUP')}
-              >
-                CUP
-              </button>
-              <button
-                type="button"
-                className={displayCurrency === 'USD' ? 'is-active' : ''}
-                onClick={() => setDisplayCurrency('USD')}
-              >
-                USD
-              </button>
-            </div>
-
             <button
               type="button"
               className="cart-btn"
@@ -610,9 +580,9 @@ export function App() {
               className="menu-trigger-btn"
               onClick={() => setMenuOpen(true)}
               aria-label="Abrir menú"
-              title="Menú e instalar app"
+              title="Menú, moneda y tema"
             >
-              <Menu size={18} />
+              <Menu size={19} />
             </button>
           </div>
         </div>
@@ -753,17 +723,18 @@ export function App() {
               <span>Favoritos ({favoriteSkus.length})</span>
             </button>
 
-            <label className="chk-pill">
-              <input
-                type="checkbox"
-                checked={onlyPriced}
-                onChange={(e) => setOnlyPriced(e.target.checked)}
-              />
-              <span>Solo con precio</span>
-            </label>
+            <button
+              type="button"
+              aria-pressed={onlyPriced}
+              className={`pill-filter-btn${onlyPriced ? ' is-active' : ''}`}
+              onClick={() => setOnlyPriced((v) => !v)}
+            >
+              <Tag size={14} />
+              <span>Con precio</span>
+            </button>
 
             <div className="sort-wrap">
-              <SlidersHorizontal size={15} />
+              <SlidersHorizontal size={14} />
               <select
                 aria-label="Ordenar catálogo"
                 value={sort}
