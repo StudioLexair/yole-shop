@@ -152,6 +152,24 @@ export function normalizeWhatsAppDigits(raw: string): string {
   return digits || '5352678747';
 }
 
+/**
+ * Usamos directamente api.whatsapp.com/send/ en lugar de wa.me porque el
+ * redirect HTTP 302 de wa.me reemplaza los emojis UTF-8 (4 bytes) por U+FFFD.
+ */
+export function buildWhatsAppUrl(phoneDigits: string | null, text?: string): string {
+  const parts: string[] = [];
+  if (phoneDigits) {
+    parts.push(`phone=${encodeURIComponent(phoneDigits)}`);
+  }
+  if (text) {
+    parts.push(`text=${encodeURIComponent(text)}`);
+  }
+  if (phoneDigits) {
+    parts.push('type=phone_number', 'app_absent=0');
+  }
+  return `https://api.whatsapp.com/send/?${parts.join('&')}`;
+}
+
 function formatDualPriceForMessage(
   price: number | null,
   currency: Currency,
@@ -187,7 +205,7 @@ export function buildWhatsAppProductLink(
     '',
     '¿Está disponible?',
   ].join('\n');
-  return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  return buildWhatsAppUrl(phone, msg);
 }
 
 export function formatWhatsAppOrderText(params: {
@@ -327,5 +345,5 @@ export function buildWhatsAppOrderLink(params: {
     })),
     includeManager: false,
   });
-  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  return buildWhatsAppUrl(phone, text);
 }

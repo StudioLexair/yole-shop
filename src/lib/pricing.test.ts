@@ -82,7 +82,7 @@ describe('pricing & WhatsApp helpers', () => {
     expect(sheinPrice.primary).toBe('Consultar precio');
   });
 
-  it('calcula resumen mixto del carrito y construye enlaces wa.me', () => {
+  it('calcula resumen mixto del carrito y construye enlaces directos con emojis intactos', () => {
     const summary = summarizeCart(
       [
         { product: sampleShoe, size: '38', qty: 1 },
@@ -99,7 +99,8 @@ describe('pricing & WhatsApp helpers', () => {
     expect(summary.hasUnpricedItems).toBe(true);
 
     const pLink = buildWhatsAppProductLink(sampleShoe, '38', DEFAULT_SETTINGS);
-    expect(pLink.startsWith('https://wa.me/5352678747?text=')).toBe(true);
+    expect(pLink.startsWith('https://api.whatsapp.com/send/?phone=5352678747&text=')).toBe(true);
+    expect(pLink).not.toContain('%EF%BF%BD');
     expect(decodeURIComponent(pLink)).toContain('✨YoleShop✨');
 
     const oLink = buildWhatsAppOrderLink({
@@ -115,8 +116,11 @@ describe('pricing & WhatsApp helpers', () => {
       summary,
       settings: DEFAULT_SETTINGS,
     });
+    expect(oLink.startsWith('https://api.whatsapp.com/send/?phone=5352678747&text=')).toBe(true);
+    expect(oLink).not.toContain('%EF%BF%BD');
     const decodedOrder = decodeURIComponent(oLink);
     expect(decodedOrder).toContain('✨YoleShop✨');
+    expect(decodedOrder).toContain('💵 Precio del producto:');
     expect(decodedOrder).toContain('YOL-003');
     expect(decodedOrder).toContain('moneda nacional 35000');
     expect(decodedOrder).toContain('📍 Dirección: Calle 7ma');

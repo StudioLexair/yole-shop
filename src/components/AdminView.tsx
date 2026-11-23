@@ -37,6 +37,7 @@ import { DEPARTMENT_LABELS } from '../types';
 import {
   calcYoleSheinPrice,
   formatCup,
+  buildWhatsAppUrl,
   formatUsd,
   formatWhatsAppOrderText,
   normalizeWhatsAppDigits,
@@ -1735,16 +1736,32 @@ export function AdminView({
                     </div>
 
                     <ul className="order-items">
-                      {ord.items.map((it, idx) => (
-                        <li key={idx}>
-                          {it.qty}x [{it.sku}] {it.title} (Talla {it.size}) —{' '}
-                          {it.unit_price !== null
-                            ? it.currency === 'USD'
-                              ? formatUsd(it.unit_price * it.qty)
-                              : formatCup(it.unit_price * it.qty)
-                            : 'Por confirmar'}
-                        </li>
-                      ))}
+                      {ord.items.map((it, idx) => {
+                        const matched = products.find((p) => p.sku === it.sku);
+                        return (
+                          <li key={idx} className="order-item-row">
+                            {matched?.image_url && (
+                              <a
+                                href={matched.image_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`Ver foto de ${it.sku}`}
+                                className="order-item-thumb"
+                              >
+                                <img src={matched.image_url} alt={it.title} />
+                              </a>
+                            )}
+                            <span>
+                              {it.qty}x [{it.sku}] {it.title} (Talla {it.size}) —{' '}
+                              {it.unit_price !== null
+                                ? it.currency === 'USD'
+                                  ? formatUsd(it.unit_price * it.qty)
+                                  : formatCup(it.unit_price * it.qty)
+                                : 'Por confirmar'}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
 
                     <div className="order-card__foot">
@@ -1796,7 +1813,8 @@ export function AdminView({
                           <Copy size={14} /> Copiar ficha (Gestor)
                         </button>
                         <a
-                          href={`https://wa.me/?text=${encodeURIComponent(
+                          href={buildWhatsAppUrl(
+                            null,
                             formatWhatsAppOrderText({
                               orderCode: ord.order_code,
                               customerName: ord.customer_name,
@@ -1820,7 +1838,7 @@ export function AdminView({
                               settings,
                               includeManager: true,
                             })
-                          )}`}
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn-outline"
@@ -1829,7 +1847,7 @@ export function AdminView({
                         </a>
                         {ord.customer_phone && (
                           <a
-                            href={`https://wa.me/${normalizeWhatsAppDigits(ord.customer_phone)}`}
+                            href={buildWhatsAppUrl(normalizeWhatsAppDigits(ord.customer_phone))}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn-outline"

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Download,
@@ -30,7 +30,7 @@ import {
   type DepartmentFilter,
   type SortMode,
 } from './lib/catalog';
-import { formatCup, normalizeWhatsAppDigits } from './lib/pricing';
+import { buildWhatsAppUrl, formatCup, normalizeWhatsAppDigits } from './lib/pricing';
 import { SUPABASE_URL, STORAGE_BUCKET } from './lib/supabase';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
@@ -362,9 +362,30 @@ export function App() {
   };
 
   const totalUnits = cart.reduce((acc, it) => acc + it.qty, 0);
-  const directWaUrl = `https://wa.me/${normalizeWhatsAppDigits(settings.whatsapp_number)}?text=${encodeURIComponent(
+  const directWaUrl = buildWhatsAppUrl(
+    normalizeWhatsAppDigits(settings.whatsapp_number),
     `Hola ${settings.store_name}, quiero consultar sobre los productos del catálogo.`
-  )}`;
+  );
+
+  const deepLinkHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkHandledRef.current || typeof window === 'undefined' || products.length === 0) {
+      return;
+    }
+    const skuParam = new URLSearchParams(window.location.search).get('sku');
+    if (!skuParam) {
+      deepLinkHandledRef.current = true;
+      return;
+    }
+    const found = products.find(
+      (p) => p.sku.toLowerCase() === skuParam.trim().toLowerCase()
+    );
+    if (found) {
+      deepLinkHandledRef.current = true;
+      setSelectedProduct(found);
+    }
+  }, [products]);
 
   // Banners visuales directos con imágenes reales del catálogo
   const bannerImg = (sku: string, fallbackDept: Department) =>
