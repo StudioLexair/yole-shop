@@ -334,39 +334,49 @@ export function AdminView({
   }, [pricePresets]);
 
   useEffect(() => {
-    let active = true;
-    const checkAdmin = async (s: Session | null) => {
-      if (!s) {
-        if (active) {
-          setSession(null);
-          setIsAdminUser(false);
-          setAuthLoading(false);
-        }
-        return;
-      }
-      const { data: adm } = await supabase
-        .from('admin_users')
-        .select('user_id')
-        .eq('user_id', s.user.id)
-        .maybeSingle();
-      if (active) {
-        setSession(s);
-        setIsAdminUser(Boolean(adm));
-        setAuthLoading(false);
-      }
-    };
-
     supabase.auth.getSession().then(({ data }) => {
-      void checkAdmin(data.session);
+      setSession(data.session);
+      if (!data.session) setAuthLoading(false);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_ev, s) => {
-      void checkAdmin(s);
+      setSession(s);
+      if (!s) {
+        setIsAdminUser(false);
+        setAuthLoading(false);
+      }
     });
     return () => {
-      active = false;
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const uid = session?.user?.id;
+    if (!uid) return;
+    setAuthLoading(true);
+    void (async () => {
+      try {
+        const { data: adm } = await supabase
+          .from('admin_users')
+          .select('user_id')
+          .eq('user_id', uid)
+          .maybeSingle();
+        if (active) {
+          setIsAdminUser(Boolean(adm));
+          setAuthLoading(false);
+        }
+      } catch {
+        if (active) {
+          setIsAdminUser(false);
+          setAuthLoading(false);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [session?.user?.id]);
 
   const loadOrders = async () => {
     setOrdersLoading(true);
