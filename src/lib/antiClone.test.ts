@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { isAllowedEmbedOrigin, isAuthorizedHost } from './antiClone';
+import {
+  buildOfficialRedirectUrl,
+  isAllowedEmbedOrigin,
+  isAuthorizedHost,
+  isBlockedMirrorHost,
+} from './antiClone';
 
 describe('antiClone Yole Shop', () => {
-  it('autoriza los dominios oficiales y bloquea clones externos', () => {
+  it('autoriza los dominios oficiales, bloquea espejo pages.dev y clones externos', () => {
     expect(isAuthorizedHost('yoleshop.ddns.net')).toBe(true);
-    expect(isAuthorizedHost('yole-shop.pages.dev')).toBe(true);
-    expect(isAuthorizedHost('abc123.yole-shop.pages.dev')).toBe(true);
     expect(isAuthorizedHost('yole-shop.vercel.app')).toBe(true);
     expect(isAuthorizedHost('yole-shop-demo.vercel.app')).toBe(true);
+
+    // Espejo yole-shop.pages.dev bloqueado y redirigido al dominio oficial
+    expect(isBlockedMirrorHost('yole-shop.pages.dev')).toBe(true);
+    expect(isBlockedMirrorHost('8d738268.yole-shop.pages.dev')).toBe(true);
+    expect(isAuthorizedHost('yole-shop.pages.dev')).toBe(false);
+    expect(isAuthorizedHost('abc123.yole-shop.pages.dev')).toBe(false);
+
+    expect(
+      buildOfficialRedirectUrl({ pathname: '/gestor', search: '?g=MARCELIS', hash: '' })
+    ).toBe('https://yoleshop.ddns.net/gestor?g=MARCELIS');
 
     expect(isAuthorizedHost('clon-yoleshop.com')).toBe(false);
     expect(isAuthorizedHost('evil-site.vercel.app')).toBe(false);

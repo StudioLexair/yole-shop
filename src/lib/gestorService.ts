@@ -1,4 +1,5 @@
 import type {
+  AdminSystemDiagnostics,
   Department,
   GestorOrderSummary,
   GestorProfile,
@@ -392,4 +393,15 @@ export async function adminUpdateGestorStatus(
 export async function adminDeleteGestor(id: string): Promise<void> {
   const { error } = await supabase.from('gestores').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function fetchAdminSystemDiagnostics(): Promise<AdminSystemDiagnostics> {
+  const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const { data, error } = await supabase.rpc('get_admin_system_diagnostics');
+  const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  if (error) throw error;
+  return {
+    ...(data as AdminSystemDiagnostics),
+    latency_ms: Math.max(1, Math.round(t1 - t0)),
+  };
 }

@@ -1,6 +1,6 @@
-const CACHE_SHELL = 'yole-shell-v27';
-const CACHE_MEDIA = 'yole-media-v27';
-const CACHE_API = 'yole-api-v27';
+const CACHE_SHELL = 'yole-shell-v28';
+const CACHE_MEDIA = 'yole-media-v28';
+const CACHE_API = 'yole-api-v28';
 
 const SHELL_URLS = [
   '/',
@@ -31,6 +31,19 @@ function stripRedirect(response) {
   });
 }
 
+function isValidNonHtmlAsset(response, request) {
+  if (!response || !response.ok) return false;
+  const ct = (response.headers.get('content-type') || '').toLowerCase();
+  const isAssetPath =
+    request.url.includes('/assets/') ||
+    request.destination === 'script' ||
+    request.destination === 'style';
+  if (isAssetPath && ct.includes('text/html')) {
+    return false;
+  }
+  return true;
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -38,7 +51,7 @@ self.addEventListener('install', (event) => {
       .then((cache) =>
         Promise.all(
           SHELL_URLS.map((u) =>
-            fetch(u)
+            fetch(u, { cache: 'no-store' })
               .then((res) => (res && res.ok ? cache.put(u, stripRedirect(res)) : undefined))
               .catch(() => undefined)
           )
@@ -62,61 +75,76 @@ self.addEventListener('activate', (event) => {
 });
 
 async function staleWhileRevalidate(event, request, cacheName, fallbackUrl) {
-  const cache = await caches.open(cacheName);
-  const rawCached =
-    (await cache.match(request)) || (fallbackUrl ? await cache.match(fallbackUrl) : null);
-  const cached =
-    rawCached && (request.mode !== 'cors' || rawCached.type !== 'opaque')
-      ? stripRedirect(rawCached)
-      : null;
+  try {
+    const cache = await caches.open(cacheName);
+    const rawCached =
+      (await cache.match(request)) || (fallbackUrl ? await cache.match(fallbackUrl) : null);
+    const cached =
+      rawCached && (request.mode !== 'cors' || rawCached.type !== 'opaque')
+        ? stripRedirect(rawCached)
+        : null;
 
-  const isOffline = typeof self.navigator !== 'undefined' && self.navigator.onLine === false;
-  if (isOffline && (cached || rawCached)) {
-    return stripRedirect(cached || rawCached);
+    const isOffline = typeof self.navigator !== 'undefined' && self.navigator.onLine === false;
+    if (isOffline && (cached || rawCached)) {
+      return stripRedirect(cached || rawCached);
+    }
+
+    const networkPromise = fetch(request)
+      .then((response) => {
+        if (response && response.ok && !response.redirected && isValidNonHtmlAsset(response, request)) {
+          cache.put(request, response.clone()).catch(() => undefined);
+        }
+        return response;
+      })
+      .catch(() => null);
+
+    if (cached && isValidNonHtmlAsset(cached, request)) {
+      event.waitUntil(networkPromise);
+      return cached;
+    }
+
+    const net = await networkPromise;
+    return net || Response.error();
+  } catch {
+    return Response.error();
   }
-
-  const networkPromise = fetch(request)
-    .then((response) => {
-      if (response && response.ok && !response.redirected) {
-        cache.put(request, response.clone()).catch(() => undefined);
-      }
-      return response;
-    })
-    .catch(() => null);
-
-  if (cached) {
-    event.waitUntil(networkPromise);
-    return cached;
-  }
-
-  const net = await networkPromise;
-  return net || Response.error();
 }
 
-async function networkFirstWithCache(request, cacheName, fallbackUrl) {
-  const cache = await caches.open(cacheName);
-  const isOffline = typeof self.navigator !== 'undefined' && self.navigator.onLine === false;
+async function networkFirstWithCache(request, cacheName, fallbackUrl, bypassHttpCache = false) {
+  try {
+    const cache = await caches.open(cacheName);
+    const isOffline = typeof self.navigator !== 'undefined' && self.navigator.onLine === false;
 
-  if (!isOffline) {
-    try {
-      const response = await fetch(request);
-      if (response && response.ok && !response.redirected) {
-        const clean = stripRedirect(response.clone());
-        cache.put(request, clean).catch(() => undefined);
+    if (!isOffline) {
+      try {
+        const response = await fetch(request, bypassHttpCache ? { cache: 'no-store' } : undefined);
+        if (response && response.ok && !response.redirected && isValidNonHtmlAsset(response, request)) {
+          const clean = stripRedirect(response.clone());
+          cache.put(request, clean).catch(() => undefined);
+          return request.mode === 'navigate' ? stripRedirect(response) : response;
+        }
+        if (response && request.mode !== 'navigate') {
+          const cached = await cache.match(request);
+          if (cached && isValidNonHtmlAsset(cached, request)) return stripRedirect(cached);
+        }
+        if (response && response.ok && request.mode === 'navigate') {
+          return stripRedirect(response);
+        }
+      } catch {
+        // Fall through silently to cache
       }
-      return request.mode === 'navigate' ? stripRedirect(response) : response;
-    } catch {
-      // Fall through silently to cache
     }
-  }
 
-  const cached = await cache.match(request);
-  if (cached) return stripRedirect(cached);
-  if (fallbackUrl) {
-    const fb = await cache.match(fallbackUrl);
-    if (fb) return stripRedirect(fb);
+    const cached = await cache.match(request);
+    if (cached && isValidNonHtmlAsset(cached, request)) return stripRedirect(cached);
+    if (fallbackUrl) {
+      const fb = await cache.match(fallbackUrl);
+      if (fb) return stripRedirect(fb);
+    }
+    return Response.error();
+  } catch {
+    return Response.error();
   }
-  return Response.error();
 }
 
 self.addEventListener('message', (event) => {
@@ -154,9 +182,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests (SPA): network-first when online, cached clean shell when offline
+  // Navigation requests (SPA): network-first (no-store) when online, cached clean shell when offline
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirstWithCache(request, CACHE_SHELL, '/'));
+    event.respondWith(networkFirstWithCache(request, CACHE_SHELL, '/', true));
+    return;
+  }
+
+  // Hashed Vite assets (/assets/*.js, /assets/*.css): network-first avoiding HTML fallback poisoning
+  if (url.origin === self.location.origin && url.pathname.startsWith('/assets/')) {
+    event.respondWith(networkFirstWithCache(request, CACHE_SHELL));
     return;
   }
 
@@ -179,7 +213,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets (JS/CSS/fonts/manifest)
+  // Remaining same-origin static files (fonts, manifest, banners)
   if (url.origin === self.location.origin) {
     event.respondWith(staleWhileRevalidate(event, request, CACHE_SHELL));
   }

@@ -1,13 +1,13 @@
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "buildId": "local",
-  "releasedAt": "2026-11-16T23:30:00Z",
+  "releasedAt": "2026-11-16T23:55:00Z",
   "mandatory": false,
-  "title": "Portal Gestores PRO Verificados · Yole Shop",
-  "description": "Nuevo Portal Gestores PRO (/gestor) sin confirmación de correo, validación manual de identidad por administración, editor de precios exclusivos por encima del base y catálogos personalizados (?g=ALIAS).",
+  "title": "Estabilidad PWA, Tema Oscuro & Panel Base de Datos · Yole Shop",
+  "description": "Blindaje contra pantallas negras por caché antiguo, colorimetría corregida en Tema Oscuro, Portal Gestores PRO mejorado con prefijo +53, bloqueo de espejo pages.dev y panel en vivo de Base de Datos & Almacenamiento en /admin.",
   "features": [
-    "Botón Modo Gestor PRO con acceso a página dedicada de registro sin Gmail",
-    "Verificación manual desde Admin (Carnet de Identidad, teléfono y dirección) antes de activar",
-    "Editor protegido: los gestores activos solo editan sus precios por encima y comparten ?g=ALIAS"
+    "Cero pantallas negras tras actualizaciones: SW v28 + carga segura de módulos y ErrorBoundary",
+    "Tema Oscuro calibrado en /gestor, botones activos, badges y protección anti-autofill",
+    "Nuevo panel Base de Datos & Almacenamiento en /admin con métricas reales de PostgreSQL y Storage"
   ]
 }

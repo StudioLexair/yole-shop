@@ -301,6 +301,64 @@ export interface AppRelease {
   updated_at?: string;
 }
 
+export interface AdminSystemTableStat {
+  name: string;
+  rows: number;
+  bytes: number;
+  rls_enabled: boolean;
+}
+
+export interface AdminStorageFolderStat {
+  folder: string;
+  files: number;
+  bytes: number;
+}
+
+export interface AdminSystemDiagnostics {
+  checked_at: string;
+  latency_ms?: number;
+  pg_version: string;
+  db_bytes: number;
+  rls_tables: number;
+  rls_policies: number;
+  tables: AdminSystemTableStat[];
+  storage: {
+    bucket: string;
+    total_files: number;
+    total_bytes: number;
+    image_files: number;
+    video_files: number;
+  };
+  storage_folders: AdminStorageFolderStat[];
+  missing_images: number;
+  orphan_catalog_files: number;
+  catalog: {
+    total: number;
+    active: number;
+    sold_out: number;
+    hidden: number;
+    unpriced: number;
+    featured: number;
+    with_video: number;
+    with_extra_images: number;
+    categories: number;
+    price_presets: number;
+  };
+  activity: {
+    orders_total: number;
+    orders_7d: number;
+    orders_pending: number;
+    gestores_total: number;
+    gestores_active: number;
+    gestores_pending: number;
+    gestor_prices: number;
+    coupons_active: number;
+    size_requests_open: number;
+    alert_subscribers: number;
+    events_total: number;
+  };
+}
+
 export const DEPARTMENT_LABELS: Record<Department, string> = {
   calzado: 'Calzado & Tenis',
   moda_shein: 'Moda Shein',

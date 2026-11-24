@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazySafe } from './lib/lazySafe';
 import {
   ArrowRight,
   ArrowUp,
@@ -86,31 +87,32 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
-const AdminView = lazy(() =>
+const AdminView = lazySafe(() =>
   import('./components/AdminView').then((m) => ({ default: m.AdminView }))
 );
-const ProductModal = lazy(() =>
+const ProductModal = lazySafe(() =>
   import('./components/ProductModal').then((m) => ({ default: m.ProductModal }))
 );
-const CartDrawer = lazy(() =>
+const CartDrawer = lazySafe(() =>
   import('./components/CartDrawer').then((m) => ({ default: m.CartDrawer }))
 );
-const BottomMenuSheet = lazy(() =>
+const BottomMenuSheet = lazySafe(() =>
   import('./components/BottomMenuSheet').then((m) => ({ default: m.BottomMenuSheet }))
 );
-const FilterSheet = lazy(() =>
+const FilterSheet = lazySafe(() =>
   import('./components/FilterSheet').then((m) => ({ default: m.FilterSheet }))
 );
-const OrderTrackerModal = lazy(() =>
+const OrderTrackerModal = lazySafe(() =>
   import('./components/OrderTrackerModal').then((m) => ({ default: m.OrderTrackerModal }))
 );
-const UpdateModal = lazy(() =>
-  import('./components/UpdateModal').then((m) => ({ default: m.UpdateModal }))
+const UpdateModal = lazySafe(
+  () => import('./components/UpdateModal').then((m) => ({ default: m.UpdateModal })),
+  { optional: true }
 );
-const AssistantModal = lazy(() =>
+const AssistantModal = lazySafe(() =>
   import('./components/AssistantModal').then((m) => ({ default: m.AssistantModal }))
 );
-const GestorPortal = lazy(() =>
+const GestorPortal = lazySafe(() =>
   import('./components/GestorPortal').then((m) => ({ default: m.GestorPortal }))
 );
 
@@ -560,6 +562,16 @@ export function App() {
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPopState = () => {
+      setIsAdmin(isAdminPath());
+      setIsGestorRoute(isGestorPath());
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   const deptCounts = useMemo(() => {
     const counts = {

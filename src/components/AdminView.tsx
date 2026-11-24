@@ -6,6 +6,7 @@ import {
   BellRing,
   Check,
   Copy,
+  Database,
   Download,
   FileText,
   Film,
@@ -79,6 +80,7 @@ import {
 import {
   AdminAnalyticsTab,
   AdminCouponsTab,
+  AdminDatabaseTab,
   AdminGestoresTab,
   AdminMarketingTab,
   AdminRequestsTab,
@@ -111,6 +113,7 @@ type AdminTab =
   | 'presets'
   | 'orders'
   | 'gestores'
+  | 'database'
   | 'requests'
   | 'coupons'
   | 'marketing'
@@ -1355,6 +1358,13 @@ export function AdminView({
           </button>
           <button
             type="button"
+            className={tab === 'database' ? 'is-active' : ''}
+            onClick={() => setTab('database')}
+          >
+            <Database size={16} /> Base de Datos
+          </button>
+          <button
+            type="button"
             className={tab === 'requests' ? 'is-active' : ''}
             onClick={() => setTab('requests')}
           >
@@ -2482,6 +2492,8 @@ export function AdminView({
         {tab === 'coupons' && <AdminCouponsTab onToast={showToast} />}
 
         {tab === 'gestores' && <AdminGestoresTab onToast={showToast} />}
+
+        {tab === 'database' && <AdminDatabaseTab onToast={showToast} />}
 
         {tab === 'marketing' && (
           <AdminMarketingTab

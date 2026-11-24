@@ -11,6 +11,7 @@ import {
   Package,
   RefreshCw,
   Search,
+  Share2,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -48,6 +49,17 @@ interface GestorPortalProps {
 
 type GestorTab = 'prices' | 'profile' | 'orders';
 
+function formatCubaPhoneInput(raw: string): string {
+  const digitsOnly = raw.replace(/\D/g, '');
+  let national = digitsOnly;
+  if (digitsOnly.startsWith('0053')) {
+    national = digitsOnly.slice(4);
+  } else if (digitsOnly.startsWith('53') && digitsOnly.length >= 2) {
+    national = digitsOnly.slice(2);
+  }
+  return `+53 ${national.slice(0, 10)}`;
+}
+
 export function GestorPortal({
   products,
   settings,
@@ -60,9 +72,9 @@ export function GestorPortal({
   const [errMsg, setErrMsg] = useState('');
   const [toast, setToast] = useState('');
 
-  // Registration fields
+  // Registration fields (prefijo +53 predeterminado y sin auto-llenado cruzado)
   const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+53 ');
   const [ciNumber, setCiNumber] = useState('');
   const [address, setAddress] = useState('');
   const [municipality, setMunicipality] = useState('');
@@ -84,21 +96,22 @@ export function GestorPortal({
   const [deptFilter, setDeptFilter] = useState<Department | 'all'>('all');
   const [markups, setMarkups] = useState<Partial<Record<Department, number>>>({});
   const [editStoreLabel, setEditStoreLabel] = useState('');
-  const [editWhatsapp, setEditWhatsapp] = useState('');
+  const [editWhatsapp, setEditWhatsapp] = useState('+53 ');
   const [editHideSku, setEditHideSku] = useState(true);
   const [orders, setOrders] = useState<GestorOrderSummary[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
 
   const showToast = useCallback((m: string) => {
     setToast(m);
-    setTimeout(() => setToast(''), 2600);
+    setTimeout(() => setToast(''), 2800);
   }, []);
 
   const loadWorkspace = useCallback(async (g: GestorProfile) => {
     setProfile(g);
     setMarkups(g.default_markups || {});
-    setEditStoreLabel(g.store_label || '');
-    setEditWhatsapp(g.contact_whatsapp || g.phone || '');
+    const safeLabel = (g.store_label || '').includes('@') ? '' : g.store_label || '';
+    setEditStoreLabel(safeLabel);
+    setEditWhatsapp(formatCubaPhoneInput(g.contact_whatsapp || g.phone || ''));
     setEditHideSku(g.hide_yole_sku !== false);
 
     if (g.status === 'active') {
@@ -137,8 +150,35 @@ export function GestorPortal({
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrMsg('');
+    if (fullName.trim().length < 4) {
+      setErrMsg('Escribe tu nombre y apellidos completos.');
+      return;
+    }
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      setErrMsg('Completa tu número de teléfono cubano (ej. +53 50000000).');
+      return;
+    }
+    if (ciNumber.replace(/\D/g, '').length !== 11) {
+      setErrMsg('El Carnet de Identidad (CI) debe tener exactamente 11 dígitos.');
+      return;
+    }
+    if (!municipality.trim()) {
+      setErrMsg('Indica tu municipio y provincia.');
+      return;
+    }
+    if (address.trim().length < 8) {
+      setErrMsg('Escribe tu dirección completa (calle, número, entre calles y reparto).');
+      return;
+    }
+    if (regPassword.length < 6) {
+      setErrMsg('Crea una contraseña de al menos 6 caracteres.');
+      return;
+    }
+
     setBusy(true);
     try {
+      const cleanLabel = storeLabel.trim().includes('@') ? '' : storeLabel.trim();
       const created = await registerGestorAccount({
         fullName,
         phone,
@@ -146,7 +186,7 @@ export function GestorPortal({
         address,
         municipality,
         slug: slugInput || fullName,
-        storeLabel,
+        storeLabel: cleanLabel,
         password: regPassword,
       });
       await loadWorkspace(created);
@@ -187,13 +227,15 @@ export function GestorPortal({
     if (!profile) return;
     setBusy(true);
     try {
+      const cleanLabel = editStoreLabel.trim().includes('@') ? '' : editStoreLabel.trim();
       const updated = await updateOwnGestorProfile(profile.id, {
-        store_label: editStoreLabel.trim(),
-        contact_whatsapp: editWhatsapp.trim(),
+        store_label: cleanLabel,
+        contact_whatsapp: formatCubaPhoneInput(editWhatsapp).trim(),
         hide_yole_sku: editHideSku,
         default_markups: markups,
       });
       setProfile(updated);
+      setEditStoreLabel(cleanLabel);
       showToast('Cambios guardados y aplicados a tu enlace');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Error guardando ajustes');
@@ -202,9 +244,13 @@ export function GestorPortal({
     }
   };
 
-  const handleSaveSinglePrice = async (p: Product) => {
+  const handleSaveSinglePrice = async (p: Product, overrideValue?: number) => {
     if (!profile || profile.status !== 'active') return;
-    const raw = (draftInputs[p.id] ?? '').trim();
+    const raw =
+      overrideValue !== undefined
+        ? String(overrideValue)
+        : (draftInputs[p.id] ?? '').trim();
+
     if (!raw) {
       await removeGestorProductPrice(profile.id, p.id);
       setCustomPrices((prev) => {
@@ -229,6 +275,7 @@ export function GestorPortal({
     try {
       await saveGestorProductPrice(profile.id, p.id, num);
       setCustomPrices((prev) => ({ ...prev, [p.id]: num }));
+      setDraftInputs((prev) => ({ ...prev, [p.id]: String(num) }));
       showToast('Precio guardado');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'No se pudo guardar el precio');
@@ -272,6 +319,11 @@ export function GestorPortal({
       )
       .slice(0, 80);
   }, [products, deptFilter, searchQ]);
+
+  const activeDeptMarkupsCount = useMemo(
+    () => Object.values(markups).filter((v) => Number(v) > 0).length,
+    [markups]
+  );
 
   const adminWaDigits = normalizeWhatsAppDigits(settings.whatsapp_number);
 
@@ -326,9 +378,11 @@ export function GestorPortal({
             </div>
 
             <div className="gestor-card">
-              <div className="gestor-auth-tabs">
+              <div className="gestor-auth-tabs" role="tablist">
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={authMode === 'register'}
                   className={authMode === 'register' ? 'is-active' : ''}
                   onClick={() => {
                     setAuthMode('register');
@@ -339,6 +393,8 @@ export function GestorPortal({
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={authMode === 'login'}
                   className={authMode === 'login' ? 'is-active' : ''}
                   onClick={() => {
                     setAuthMode('login');
@@ -350,13 +406,15 @@ export function GestorPortal({
               </div>
 
               {authMode === 'register' ? (
-                <form className="gestor-form" onSubmit={handleRegister}>
+                <form className="gestor-form" autoComplete="off" noValidate onSubmit={handleRegister}>
                   <div className="gestor-form-grid">
                     <label className="field">
                       <span>Nombre y apellidos completos *</span>
                       <input
                         type="text"
-                        required
+                        name="gestor_full_name"
+                        autoComplete="name"
+                        data-lpignore="true"
                         placeholder="Ej. Carlos Manuel Pérez Díaz"
                         value={fullName}
                         onChange={(e) => {
@@ -370,21 +428,29 @@ export function GestorPortal({
                     </label>
 
                     <label className="field">
-                      <span>Teléfono / WhatsApp *</span>
+                      <span>Teléfono / WhatsApp (Cuba +53) *</span>
                       <input
                         type="tel"
-                        required
-                        placeholder="Ej. +53 52678747"
+                        name="gestor_phone_cu"
+                        autoComplete="off"
+                        data-lpignore="true"
+                        inputMode="tel"
+                        placeholder="+53 50000000"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onChange={(e) => setPhone(formatCubaPhoneInput(e.target.value))}
                       />
+                      <small className="field-hint">
+                        Prefijo +53 listo — escribe tus 8 dígitos móviles.
+                      </small>
                     </label>
 
                     <label className="field">
                       <span>Carnet de Identidad (CI · 11 dígitos) *</span>
                       <input
                         type="text"
-                        required
+                        name="gestor_ci_number"
+                        autoComplete="off"
+                        data-lpignore="true"
                         inputMode="numeric"
                         maxLength={11}
                         placeholder="Ej. 94051212345"
@@ -399,7 +465,9 @@ export function GestorPortal({
                       <span>Municipio y Provincia *</span>
                       <input
                         type="text"
-                        required
+                        name="gestor_municipality"
+                        autoComplete="off"
+                        data-lpignore="true"
                         placeholder="Ej. Santa Clara, Villa Clara"
                         value={municipality}
                         onChange={(e) => setMunicipality(e.target.value)}
@@ -411,7 +479,9 @@ export function GestorPortal({
                     <span>Dirección completa (Calle, número, entre calles, reparto) *</span>
                     <input
                       type="text"
-                      required
+                      name="gestor_street_address"
+                      autoComplete="off"
+                      data-lpignore="true"
                       placeholder="Ej. Calle Independencia #45 e/ Martí y Maceo, Reparto Centro"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
@@ -423,7 +493,9 @@ export function GestorPortal({
                       <span>Alias único para tu enlace (?g=ALIAS) *</span>
                       <input
                         type="text"
-                        required
+                        name="gestor_alias_slug"
+                        autoComplete="off"
+                        data-lpignore="true"
                         placeholder="Ej. CARLOS"
                         value={slugInput}
                         onChange={(e) => {
@@ -432,30 +504,35 @@ export function GestorPortal({
                         }}
                       />
                       <small className="field-hint">
-                        Tu tienda será: yoleshop.ddns.net/?g={slugInput || 'ALIAS'}
+                        Tu enlace oficial: <b>yoleshop.ddns.net/?g={slugInput || 'ALIAS'}</b>
                       </small>
                     </label>
 
                     <label className="field">
-                      <span>Nombre público de tu catálogo (opcional)</span>
+                      <span>Crea una contraseña para tu panel *</span>
                       <input
-                        type="text"
-                        placeholder="Ej. Catálogo Carlos"
-                        value={storeLabel}
-                        onChange={(e) => setStoreLabel(e.target.value)}
+                        type="password"
+                        name="gestor_new_password"
+                        autoComplete="new-password"
+                        data-lpignore="true"
+                        minLength={6}
+                        placeholder="Mínimo 6 caracteres"
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
                       />
                     </label>
                   </div>
 
                   <label className="field">
-                    <span>Crea una contraseña para entrar a tu panel *</span>
+                    <span>Nombre público de tu catálogo (opcional)</span>
                     <input
-                      type="password"
-                      required
-                      minLength={6}
-                      placeholder="Mínimo 6 caracteres"
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
+                      type="text"
+                      name="gestor_catalog_title"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      placeholder="Ej. Catálogo Carlos (si lo dejas vacío se muestra Yole Shop)"
+                      value={storeLabel}
+                      onChange={(e) => setStoreLabel(e.target.value)}
                     />
                   </label>
 
@@ -475,7 +552,9 @@ export function GestorPortal({
                     <input
                       type="text"
                       required
-                      placeholder="Ej. 52678747 o CARLOS"
+                      name="gestor_login_identifier"
+                      autoComplete="username"
+                      placeholder="Ej. +53 50000000 o CARLOS"
                       value={loginId}
                       onChange={(e) => setLoginId(e.target.value)}
                     />
@@ -485,6 +564,8 @@ export function GestorPortal({
                     <input
                       type="password"
                       required
+                      name="gestor_login_password"
+                      autoComplete="current-password"
                       placeholder="Tu contraseña"
                       value={loginPass}
                       onChange={(e) => setLoginPass(e.target.value)}
@@ -589,6 +670,16 @@ export function GestorPortal({
                   {copiedLink ? <Check size={14} /> : <Copy size={14} />}
                   <span>{copiedLink ? 'Enlace copiado' : 'Copiar mi enlace'}</span>
                 </button>
+                <a
+                  href={`https://api.whatsapp.com/send/?text=${encodeURIComponent(
+                    `Mira nuestro catálogo completo de Tenis, Moda Shein, Motos y Equipos Solares aquí: ${buildGestorShareUrl(profile.slug)}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn--whatsapp btn--sm"
+                >
+                  <Share2 size={14} /> Compartir por WhatsApp
+                </a>
                 <button
                   type="button"
                   className="btn btn--outline-dark btn--sm"
@@ -599,9 +690,30 @@ export function GestorPortal({
               </div>
             </div>
 
-            <div className="gestor-tabs">
+            <div className="gestor-kpi-strip">
+              <div className="gestor-kpi-pill">
+                <small>Productos editables</small>
+                <strong>{products.filter((x) => x.status === 'active' && x.price !== null).length}</strong>
+              </div>
+              <div className="gestor-kpi-pill">
+                <small>Precios fijos tuyos</small>
+                <strong>{Object.keys(customPrices).length}</strong>
+              </div>
+              <div className="gestor-kpi-pill">
+                <small>Márgenes por depto</small>
+                <strong>{activeDeptMarkupsCount}</strong>
+              </div>
+              <div className="gestor-kpi-pill">
+                <small>Pedidos enlazados</small>
+                <strong>{orders.length}</strong>
+              </div>
+            </div>
+
+            <div className="gestor-tabs" role="tablist">
               <button
                 type="button"
+                role="tab"
+                aria-selected={tab === 'prices'}
                 className={tab === 'prices' ? 'is-active' : ''}
                 onClick={() => setTab('prices')}
               >
@@ -609,6 +721,8 @@ export function GestorPortal({
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={tab === 'profile'}
                 className={tab === 'profile' ? 'is-active' : ''}
                 onClick={() => setTab('profile')}
               >
@@ -616,6 +730,8 @@ export function GestorPortal({
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={tab === 'orders'}
                 className={tab === 'orders' ? 'is-active' : ''}
                 onClick={() => setTab('orders')}
               >
@@ -630,7 +746,7 @@ export function GestorPortal({
                     <Search size={15} />
                     <input
                       type="search"
-                      placeholder="Buscar producto para ajustar su precio..."
+                      placeholder="Buscar producto por nombre, marca o SKU..."
                       value={searchQ}
                       onChange={(e) => setSearchQ(e.target.value)}
                     />
@@ -662,9 +778,15 @@ export function GestorPortal({
                         { default_markups: markups, prices: customPrices },
                         settings.usd_to_cup_rate
                       ) ?? base;
-                    const gain = Math.max(0, Math.round((effective - base) * 100) / 100);
+                    const draftRaw = draftInputs[p.id];
+                    const parsedDraft =
+                      draftRaw !== undefined && draftRaw.trim() !== '' ? Number(draftRaw) : effective;
+                    const previewPrice = Number.isFinite(parsedDraft) ? parsedDraft : effective;
+                    const belowFloor = previewPrice < base;
+                    const gain = Math.max(0, Math.round((previewPrice - base) * 100) / 100);
                     const hasManual = customPrices[p.id] !== undefined;
                     const isSaving = savingProductId === p.id;
+                    const quickSteps = p.currency === 'CUP' ? [2000, 5000] : [5, 10, 25];
 
                     return (
                       <div key={p.id} className="gestor-price-row">
@@ -681,21 +803,50 @@ export function GestorPortal({
                           <small>
                             Base Yole:{' '}
                             <b>{p.currency === 'CUP' ? formatCup(base) : formatUsd(base)}</b> ·{' '}
-                            Tu precio actual:{' '}
-                            <span className="gain-txt">
-                              {p.currency === 'CUP' ? formatCup(effective) : formatUsd(effective)} (+
-                              {p.currency === 'CUP' ? formatCup(gain) : formatUsd(gain)})
-                            </span>
+                            {belowFloor ? (
+                              <span className="err-txt">
+                                Mínimo permitido:{' '}
+                                {p.currency === 'CUP' ? formatCup(base) : formatUsd(base)}
+                              </span>
+                            ) : (
+                              <>
+                                Tu venta:{' '}
+                                <span className="gain-txt">
+                                  {p.currency === 'CUP'
+                                    ? formatCup(previewPrice)
+                                    : formatUsd(previewPrice)}{' '}
+                                  (+{p.currency === 'CUP' ? formatCup(gain) : formatUsd(gain)})
+                                </span>
+                              </>
+                            )}
                           </small>
                         </div>
                         <div className="gestor-price-row__edit">
+                          <div className="gestor-quick-bumps">
+                            {quickSteps.map((step) => (
+                              <button
+                                key={step}
+                                type="button"
+                                className="btn-quick-bump"
+                                disabled={isSaving}
+                                onClick={() => {
+                                  const nextVal = Math.max(base, effective) + step;
+                                  setDraftInputs((prev) => ({ ...prev, [p.id]: String(nextVal) }));
+                                  void handleSaveSinglePrice(p, nextVal);
+                                }}
+                                title={`Sumar +${step} ${p.currency} y guardar`}
+                              >
+                                +{step >= 1000 ? `${step / 1000}k` : `$${step}`}
+                              </button>
+                            ))}
+                          </div>
                           <div className="gestor-input-currency">
                             <input
                               type="number"
                               min={base}
                               step="any"
                               placeholder={String(effective)}
-                              value={draftInputs[p.id] ?? ''}
+                              value={draftInputs[p.id] ?? String(effective)}
                               onChange={(e) =>
                                 setDraftInputs((prev) => ({
                                   ...prev,
@@ -708,7 +859,7 @@ export function GestorPortal({
                           <button
                             type="button"
                             className="btn btn--primary btn--sm"
-                            disabled={isSaving}
+                            disabled={isSaving || belowFloor}
                             onClick={() => void handleSaveSinglePrice(p)}
                           >
                             {isSaving ? '...' : 'Guardar'}
@@ -768,7 +919,10 @@ export function GestorPortal({
                     <span>Nombre visible de tu tienda</span>
                     <input
                       type="text"
-                      placeholder="Ej. Catálogo Carlos"
+                      name="gestor_store_display"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      placeholder="Ej. Catálogo Carlos (opcional)"
                       value={editStoreLabel}
                       onChange={(e) => setEditStoreLabel(e.target.value)}
                     />
@@ -777,9 +931,12 @@ export function GestorPortal({
                     <span>WhatsApp que recibe los pedidos de tus clientes</span>
                     <input
                       type="tel"
-                      placeholder="Ej. +53 5..."
+                      name="gestor_wa_display"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      placeholder="+53 50000000"
                       value={editWhatsapp}
-                      onChange={(e) => setEditWhatsapp(e.target.value)}
+                      onChange={(e) => setEditWhatsapp(formatCubaPhoneInput(e.target.value))}
                     />
                   </label>
                 </div>

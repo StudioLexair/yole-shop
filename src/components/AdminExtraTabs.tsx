@@ -4,12 +4,15 @@ import {
   BellRing,
   Check,
   Copy,
+  Database,
   Download,
+  HardDrive,
   Image as ImageIcon,
   MessageCircle,
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   Tag,
   Trash2,
@@ -17,6 +20,7 @@ import {
   Users,
 } from 'lucide-react';
 import type {
+  AdminSystemDiagnostics,
   AlertSubscriber,
   Coupon,
   CouponDiscountType,
@@ -36,7 +40,9 @@ import {
   adminFetchAllGestores,
   adminUpdateGestorStatus,
   buildGestorShareUrl,
+  fetchAdminSystemDiagnostics,
 } from '../lib/gestorService';
+import { purgeStaleCachesAndReload } from '../lib/lazySafe';
 import { DEFAULT_PAYMENT_RATES, DEPARTMENT_LABELS } from '../types';
 import {
   deleteCoupon,
@@ -1219,3 +1225,259 @@ export function AdminGestoresTab({
     </section>
   );
 }
+
+/* ==================== TAB: BASE DE DATOS & ALMACENAMIENTO ==================== */
+function formatBytesReadable(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+export function AdminDatabaseTab({ onToast }: { onToast: (msg: string) => void }) {
+  const [diag, setDiag] = useState<AdminSystemDiagnostics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [swInfo, setSwInfo] = useState('Comprobando...');
+  const [localCacheKb, setLocalCacheKb] = useState(0);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchAdminSystemDiagnostics();
+      setDiag(res);
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Error consultando base de datos');
+    } finally {
+      setLoading(false);
+    }
+
+    try {
+      let bytes = 0;
+      for (let i = 0; i < window.localStorage.length; i += 1) {
+        const k = window.localStorage.key(i) || '';
+        const v = window.localStorage.getItem(k) || '';
+        bytes += (k.length + v.length) * 2;
+      }
+      setLocalCacheKb(Math.round((bytes / 1024) * 10) / 10);
+
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        setSwInfo(
+          regs.length > 0
+            ? `Activo (${regs[0].active?.scriptURL?.split('/').pop() || 'sw.js'})`
+            : 'Sin Service Worker'
+        );
+      } else {
+        setSwInfo('No soportado');
+      }
+    } catch {
+      setSwInfo('No disponible');
+    }
+  }, [onToast]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const dbQuotaBytes = 500 * 1024 * 1024;
+  const storageQuotaBytes = 1024 * 1024 * 1024;
+  const dbPct = diag ? Math.min(100, Math.max(1, (diag.db_bytes / dbQuotaBytes) * 100)) : 0;
+  const storagePct = diag
+    ? Math.min(100, Math.max(1, (diag.storage.total_bytes / storageQuotaBytes) * 100))
+    : 0;
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel__head">
+        <div>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Database size={18} /> Estado de Base de Datos &amp; Almacenamiento
+          </h2>
+          <p>
+            Diagnóstico real en vivo de PostgreSQL, tablas, seguridad RLS, bucket de imágenes y
+            salud del catálogo.
+          </p>
+        </div>
+        <div className="admin-panel__actions">
+          <button type="button" className="btn-outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCw size={15} /> {loading ? 'Consultando...' : 'Actualizar ahora'}
+          </button>
+          <button
+            type="button"
+            className="btn-outline"
+            onClick={() => void purgeStaleCachesAndReload()}
+          >
+            Purgar caché PWA
+          </button>
+        </div>
+      </div>
+
+      {!diag && loading ? (
+        <p className="muted-empty">Consultando métricas en vivo de PostgreSQL y Storage...</p>
+      ) : diag ? (
+        <div className="db-diag-wrap">
+          {/* KPI cards */}
+          <div className="db-kpi-grid">
+            <div className="db-kpi-card">
+              <small>Motor PostgreSQL</small>
+              <strong className="db-ok-txt">En línea · v{diag.pg_version}</strong>
+              <span>
+                Latencia: <b>{diag.latency_ms ?? 0} ms</b> ·{' '}
+                {new Date(diag.checked_at).toLocaleTimeString('es-ES')}
+              </span>
+            </div>
+
+            <div className="db-kpi-card">
+              <small>Tamaño Base de Datos</small>
+              <strong>{formatBytesReadable(diag.db_bytes)}</strong>
+              <div className="db-meter">
+                <div className="db-meter__fill" style={{ width: `${dbPct}%` }} />
+              </div>
+              <span>{dbPct.toFixed(1)}% de 500 MB cuota Free</span>
+            </div>
+
+            <div className="db-kpi-card">
+              <small>Almacenamiento ({diag.storage.bucket})</small>
+              <strong>{formatBytesReadable(diag.storage.total_bytes)}</strong>
+              <div className="db-meter">
+                <div className="db-meter__fill is-blue" style={{ width: `${storagePct}%` }} />
+              </div>
+              <span>
+                {diag.storage.total_files} archivos ({diag.storage.image_files} imgs ·{' '}
+                {diag.storage.video_files} videos)
+              </span>
+            </div>
+
+            <div className="db-kpi-card">
+              <small>Seguridad RLS &amp; Navegador</small>
+              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <ShieldCheck size={16} className="db-ok-txt" /> {diag.rls_tables} tablas protegidas
+              </strong>
+              <span>
+                {diag.rls_policies} políticas RLS · Cache local: {localCacheKb} KB · {swInfo}
+              </span>
+            </div>
+          </div>
+
+          {/* Two columns: Storage folders + Catalog/Activity health */}
+          <div className="db-two-cols">
+            <div className="db-box">
+              <h3>
+                <HardDrive size={15} /> Desglose de Almacenamiento ({diag.storage.bucket})
+              </h3>
+              <div className="db-list">
+                {diag.storage_folders.map((f) => (
+                  <div key={f.folder} className="db-row-item">
+                    <span>
+                      <code>/{f.folder}</code>
+                    </span>
+                    <div>
+                      <small>{f.files} archivos</small>
+                      <strong>{formatBytesReadable(f.bytes)}</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="db-audit-alerts">
+                <span className={diag.missing_images > 0 ? 'is-warn' : 'is-ok'}>
+                  Productos visibles sin imagen: <b>{diag.missing_images}</b>
+                </span>
+                <span className={diag.orphan_catalog_files > 0 ? 'is-warn' : 'is-ok'}>
+                  Archivos huérfanos en /catalog: <b>{diag.orphan_catalog_files}</b>
+                </span>
+              </div>
+            </div>
+
+            <div className="db-box">
+              <h3>
+                <BarChart3 size={15} /> Salud del Catálogo y Operación
+              </h3>
+              <div className="db-stats-chips">
+                <span>
+                  Activos: <b>{diag.catalog.active}</b>
+                </span>
+                <span>
+                  Sin precio: <b>{diag.catalog.unpriced}</b>
+                </span>
+                <span>
+                  Agotados: <b>{diag.catalog.sold_out}</b>
+                </span>
+                <span>
+                  Ocultos: <b>{diag.catalog.hidden}</b>
+                </span>
+                <span>
+                  TOP destacados: <b>{diag.catalog.featured}</b>
+                </span>
+                <span>
+                  Con fotos extra: <b>{diag.catalog.with_extra_images}</b>
+                </span>
+                <span>
+                  Con video 360°: <b>{diag.catalog.with_video}</b>
+                </span>
+                <span>
+                  Grupos precio: <b>{diag.catalog.price_presets}</b>
+                </span>
+                <span>
+                  Pedidos totales: <b>{diag.activity.orders_total}</b> ({diag.activity.orders_7d} últimos 7d)
+                </span>
+                <span>
+                  Gestores PRO: <b>{diag.activity.gestores_active}</b> activos ·{' '}
+                  <b>{diag.activity.gestores_pending}</b> pendientes
+                </span>
+                <span>
+                  Precios Gestor: <b>{diag.activity.gestor_prices}</b>
+                </span>
+                <span>
+                  Cupones VIP activos: <b>{diag.activity.coupons_active}</b>
+                </span>
+                <span>
+                  Suscriptores PWA: <b>{diag.activity.alert_subscribers}</b>
+                </span>
+                <span>
+                  Eventos analítica: <b>{diag.activity.events_total}</b>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tables breakdown */}
+          <div className="db-box">
+            <h3>Tablas de la Base de Datos ({diag.tables.length})</h3>
+            <div className="db-table-wrap">
+              <table className="db-table">
+                <thead>
+                  <tr>
+                    <th>Tabla</th>
+                    <th>Filas aprox.</th>
+                    <th>Espacio total</th>
+                    <th>Seguridad RLS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diag.tables.map((t) => (
+                    <tr key={t.name}>
+                      <td>
+                        <code>public.{t.name}</code>
+                      </td>
+                      <td>{t.rows.toLocaleString('es-ES')}</td>
+                      <td>
+                        <strong>{formatBytesReadable(t.bytes)}</strong>
+                      </td>
+                      <td>
+                        <span className={`gestor-status-badge ${t.rls_enabled ? 'is-active' : 'is-suspended'}`}>
+                          {t.rls_enabled ? 'RLS Activo' : 'Sin RLS'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
