@@ -121,6 +121,7 @@ type QuickFilter =
   | 'hombre'
   | 'accesorios'
   | 'movilidad'
+  | 'solares'
   | 'sold_out'
   | 'hidden';
 
@@ -395,7 +396,8 @@ export function AdminView({
           quickFilter === 'moda_shein' ||
           quickFilter === 'hombre' ||
           quickFilter === 'accesorios' ||
-          quickFilter === 'movilidad') &&
+          quickFilter === 'movilidad' ||
+          quickFilter === 'solares') &&
         p.department !== quickFilter
       ) {
         return false;
@@ -1591,6 +1593,7 @@ export function AdminView({
                     ['hombre', 'Hombre'],
                     ['accesorios', 'Accesorios'],
                     ['movilidad', 'Motos & Virginia'],
+                    ['solares', 'Equipos Solares'],
                     ['sold_out', 'Agotados'],
                     ['hidden', 'Ocultos'],
                   ] as Array<[QuickFilter, string]>

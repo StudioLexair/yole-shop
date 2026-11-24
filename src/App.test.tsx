@@ -529,4 +529,100 @@ describe('Yole Shop App', () => {
     expect(within(menuPanel).getByRole('button', { name: 'CUP' }).className).toContain('is-active');
     expect(within(menuPanel).getByRole('button', { name: 'USD' }).className).not.toContain('is-active');
   });
+
+  it('integra el departamento Equipos Solares con subcategorías, precios USD y bloqueo de transferencia', async () => {
+    vi.mocked(fetchStoreData).mockResolvedValueOnce({
+      settings: DEFAULT_SETTINGS,
+      categories: [
+        ...mockCategories,
+        {
+          id: 'estaciones-energia',
+          name: 'Estaciones de Energía',
+          department: 'solares',
+          sort_order: 200,
+        },
+        {
+          id: 'paneles-protecciones',
+          name: 'Paneles & Protecciones',
+          department: 'solares',
+          sort_order: 230,
+        },
+      ],
+      products: [
+        ...mockProducts.slice(0, 2),
+        {
+          id: 'sol1',
+          sku: 'SOL-015',
+          title: 'Estación EcoFlow DELTA 2 (1024Wh)',
+          brand: 'EcoFlow',
+          department: 'solares',
+          category_id: 'estaciones-energia',
+          quality: 'Importado',
+          currency: 'USD',
+          cost_price: 870,
+          price: 890,
+          sizes: ['Disponible'],
+          fit_note: 'Capacidad 1024Wh, salida AC 1800W',
+          image_url: 'https://example.com/sol15.webp',
+          image_path: 'catalog/SOL-015.webp',
+          status: 'active',
+          featured: true,
+          source_group: 'equipos_solares',
+          sort_order: 3750,
+        },
+        {
+          id: 'sol2',
+          sku: 'SOL-078',
+          title: 'Panel Solar Monocristalino 580W',
+          brand: 'Solar',
+          department: 'solares',
+          category_id: 'paneles-protecciones',
+          quality: 'Importado',
+          currency: 'USD',
+          cost_price: 165,
+          price: 185,
+          sizes: ['Disponible'],
+          fit_note: 'Panel monocristalino 580W',
+          image_url: 'https://example.com/sol78.webp',
+          image_path: 'catalog/SOL-078.webp',
+          status: 'active',
+          featured: false,
+          source_group: 'equipos_solares',
+          sort_order: 4380,
+        },
+      ],
+    });
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Estación EcoFlow DELTA 2 (1024Wh)')).toBeInTheDocument();
+    });
+
+    const nav = screen.getByRole('navigation', { name: 'Departamentos' });
+    fireEvent.click(within(nav).getByRole('button', { name: /Equipos Solares 2/i }));
+
+    const solarBar = screen.getByRole('group', { name: 'Categorías de Equipos Solares' });
+    expect(within(solarBar).getByRole('button', { name: /Todo Solares 2/i })).toBeInTheDocument();
+    fireEvent.click(within(solarBar).getByRole('button', { name: /Estaciones de Energía 1/i }));
+
+    expect(screen.getByText('Estación EcoFlow DELTA 2 (1024Wh)')).toBeInTheDocument();
+    expect(screen.queryByText('Panel Solar Monocristalino 580W')).not.toBeInTheDocument();
+    expect(screen.getByText('$890 USD')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Estación EcoFlow DELTA 2 (1024Wh)'));
+    const modal = screen.getByRole('dialog');
+    expect(
+      within(modal).getByText(/Equipos Solares no admiten transferencia/i)
+    ).toBeInTheDocument();
+    expect(within(modal).getByText(/Disponibilidad \/ Opción:/i)).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('button', { name: /Agregar al carrito/i }));
+    fireEvent.click(within(modal).getByRole('button', { name: 'Cerrar' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
+    const cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    expect(within(cartDialog).getByRole('button', { name: /Transf\./i })).toBeDisabled();
+    expect(
+      within(cartDialog).getByText(/Los Equipos Solares no admiten pago por transferencia/i)
+    ).toBeInTheDocument();
+  });
 });

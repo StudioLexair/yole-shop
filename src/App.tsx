@@ -382,6 +382,7 @@ export function App() {
       hombre: 0,
       accesorios: 0,
       movilidad: 0,
+      solares: 0,
     };
     for (const p of products) {
       if (p.status === 'hidden') continue;
@@ -429,6 +430,20 @@ export function App() {
     }
     return categories.filter((c) => c.department === department);
   }, [categories, department, calzadoSub, sheinGender]);
+
+  const solarCategories = useMemo(() => {
+    const countMap = new Map<string, number>();
+    for (const p of products) {
+      if (p.department !== 'solares') continue;
+      if (p.status === 'hidden') continue;
+      if (!settings.show_sold_out_public && p.status === 'sold_out') continue;
+      countMap.set(p.category_id, (countMap.get(p.category_id) || 0) + 1);
+    }
+    return categories
+      .filter((c) => c.department === 'solares')
+      .map((c) => ({ ...c, count: countMap.get(c.id) || 0 }))
+      .filter((c) => c.count > 0);
+  }, [categories, products, settings.show_sold_out_public]);
 
   const deptScopedProducts = useMemo(() => {
     return products.filter((p) => {
@@ -815,6 +830,14 @@ export function App() {
               Motos &amp; Virginia{' '}
               <span className="nav-count">{deptCounts.movilidad}</span>
             </button>
+            <button
+              type="button"
+              className={department === 'solares' ? 'is-active' : ''}
+              onClick={() => handleSelectDept('solares')}
+            >
+              Equipos Solares{' '}
+              <span className="nav-count">{deptCounts.solares}</span>
+            </button>
           </nav>
 
           <div className="header-actions">
@@ -957,6 +980,26 @@ export function App() {
               <div className="col-banner__overlay">
                 <span className="col-banner__tag">D Todo Virginia</span>
                 <strong>Motos &amp; Movilidad ({deptCounts.movilidad})</strong>
+                <span className="col-banner__cta">
+                  Ver catálogo <ArrowRight size={14} />
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className={`col-banner${department === 'solares' ? ' is-selected' : ''}`}
+              onClick={() => handleSelectDept('solares')}
+            >
+              <SmartImage
+                src={bannerImg('SOL-015', 'solares')}
+                alt="Equipos Solares, EcoFlow, Bluetti, Inversores y Paneles"
+                loading="eager"
+                variant="banner"
+              />
+              <div className="col-banner__overlay">
+                <span className="col-banner__tag">Energía &amp; Respaldo</span>
+                <strong>Equipos Solares ({deptCounts.solares})</strong>
                 <span className="col-banner__cta">
                   Ver catálogo <ArrowRight size={14} />
                 </span>
@@ -1226,6 +1269,30 @@ export function App() {
                 <span className="dept-subpill__count">{deptCounts.calzadoShein}</span>
               </button>
             )}
+          </div>
+        )}
+
+        {!search.trim() && department === 'solares' && solarCategories.length > 0 && (
+          <div className="dept-subbar" role="group" aria-label="Categorías de Equipos Solares">
+            <button
+              type="button"
+              className={`dept-subpill${categoryId === 'all' ? ' is-active' : ''}`}
+              onClick={() => setCategoryId('all')}
+            >
+              <span>Todo Solares</span>
+              <span className="dept-subpill__count">{deptCounts.solares}</span>
+            </button>
+            {solarCategories.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                className={`dept-subpill${categoryId === cat.id ? ' is-active' : ''}`}
+                onClick={() => setCategoryId(cat.id)}
+              >
+                <span>{cat.name}</span>
+                <span className="dept-subpill__count">{cat.count}</span>
+              </button>
+            ))}
           </div>
         )}
 

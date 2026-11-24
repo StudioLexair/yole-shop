@@ -4,11 +4,15 @@ import {
   buildWhatsAppProductLink,
   calcYoleSheinPrice,
   cartHasSheinItems,
+  cartHasTransferBlockedItems,
+  cartTransferBlockReason,
   formatWhatsAppOrderText,
   getDisplayPrice,
   isCupLockedFootwear,
   isSheinDepartment,
   isSheinProduct,
+  isSolarProduct,
+  isTransferRestrictedProduct,
   normalizeWhatsAppDigits,
   summarizeCart,
 } from './pricing';
@@ -298,5 +302,45 @@ describe('pricing & WhatsApp helpers', () => {
       'transferencia'
     );
     expect(zuecoSummary.transferFeeCup).toBe(0);
+
+    // Equipos Solares también bloquean transferencia y muestran motivo específico
+    const sampleSolar: Product = {
+      ...sampleShoe,
+      id: '5',
+      sku: 'SOL-015',
+      title: 'EcoFlow DELTA 2 (1024Wh / 1800W)',
+      brand: 'EcoFlow',
+      department: 'solares',
+      category_id: 'estaciones-energia',
+      quality: 'Importado',
+      currency: 'USD',
+      cost_price: 870,
+      price: 890,
+      sizes: ['Disponible'],
+      source_group: 'equipos_solares',
+    };
+    expect(isSolarProduct(sampleSolar)).toBe(true);
+    expect(isSheinProduct(sampleSolar)).toBe(false);
+    expect(isTransferRestrictedProduct(sampleSolar)).toBe(true);
+    expect(cartHasTransferBlockedItems([{ product: sampleSolar, size: 'Disponible', qty: 1 }])).toBe(
+      true
+    );
+    expect(
+      cartTransferBlockReason([{ product: sampleSolar, size: 'Disponible', qty: 1 }])
+    ).toMatch(/Equipos Solares no admiten pago por transferencia/i);
+    expect(
+      cartTransferBlockReason([
+        { product: sampleZuecoShein, size: '38', qty: 1 },
+        { product: sampleSolar, size: 'Disponible', qty: 1 },
+      ])
+    ).toMatch(/Shein y Equipos Solares no admiten pago por transferencia/i);
+
+    const solarSummary = summarizeCart(
+      [{ product: sampleSolar, size: 'Disponible', qty: 1 }],
+      DEFAULT_SETTINGS,
+      'recogida',
+      'transferencia'
+    );
+    expect(solarSummary.transferFeeCup).toBe(0);
   });
 });

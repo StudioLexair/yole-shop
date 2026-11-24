@@ -1,4 +1,4 @@
-export type Department = 'calzado' | 'moda_shein' | 'hombre' | 'accesorios' | 'movilidad';
+export type Department = 'calzado' | 'moda_shein' | 'hombre' | 'accesorios' | 'movilidad' | 'solares';
 export type Currency = 'CUP' | 'USD';
 export type ProductStatus = 'active' | 'sold_out' | 'hidden';
 export type DeliveryType = 'domicilio' | 'recogida';
@@ -226,4 +226,5 @@ export const DEPARTMENT_LABELS: Record<Department, string> = {
   hombre: 'Hombre',
   accesorios: 'Accesorios',
   movilidad: 'Motos & Todo Virginia',
+  solares: 'Equipos Solares',
 };

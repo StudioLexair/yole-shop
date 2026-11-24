@@ -171,6 +171,14 @@ const SYNONYM_GROUPS: Record<string, string[]> = {
   baterias: ['bateria', 'baterias', 'litio', 'lifepo4', 'polifosfato', 'gel', 'catl'],
   motor: ['motor', 'motores', 'unidad', 'chapa', 'kit'],
   virginia: ['virginia', 'moto', 'motorina', 'triciclo', 'bicimoto', 'bateria'],
+  solar: ['solar', 'solares', 'panel', 'paneles', 'inversor', 'estacion', 'lifepo4', 'ecoflow', 'bluetti'],
+  solares: ['solar', 'solares', 'panel', 'paneles', 'inversor', 'estacion', 'lifepo4', 'ecoflow', 'bluetti'],
+  panel: ['panel', 'paneles', 'solar', 'solares', 'fotovoltaico'],
+  paneles: ['panel', 'paneles', 'solar', 'solares', 'fotovoltaico'],
+  inversor: ['inversor', 'inversores', 'hibrido', 'mppt', 'powmr', 'sumry', 'must', 'kit'],
+  inversores: ['inversor', 'inversores', 'hibrido', 'mppt', 'powmr', 'sumry', 'must', 'kit'],
+  estacion: ['estacion', 'estaciones', 'ecoflow', 'bluetti', 'anker', 'ampace', 'oupes', 'aferry', 'energia', 'portatil'],
+  estaciones: ['estacion', 'estaciones', 'ecoflow', 'bluetti', 'anker', 'ampace', 'oupes', 'aferry', 'energia', 'portatil'],
 };
 
 const STOP_WORDS = new Set([
@@ -255,6 +263,11 @@ export function buildSearchLexicon(products: Product[], categories: Category[]):
     ['pantalon', 'Pantalón'],
     ['tenis', 'Tenis'],
     ['accesorios', 'Accesorios'],
+    ['solares', 'Equipos Solares'],
+    ['panel', 'Panel Solar'],
+    ['inversor', 'Inversor'],
+    ['ecoflow', 'EcoFlow'],
+    ['bluetti', 'Bluetti'],
   ] as const) {
     registerWord(base[0], base[1]);
   }
@@ -457,11 +470,18 @@ export function parseSmartQuery(
     departmentHints.push('accesorios');
   }
   if (
-    /\b(moto|motos|motorina|motorinas|bicimoto|bicicleta|triciclo|bateria|baterias|lifan|vedca|kvitova|mishozuki|unizuki|torvan|bucatti|topmaq|virginia|motor|motoneta)\b/.test(
+    /\b(moto|motos|motorina|motorinas|bicimoto|bicicleta|triciclo|virginia|motor|motoneta)\b/.test(
       joinedCorrected
     )
   ) {
     departmentHints.push('movilidad');
+  }
+  if (
+    /\b(solar|solares|panel|paneles|inversor|inversores|ecoflow|bluetti|anker|ampace|oupes|aferry|humsienk|ecoworthy|lifepo4|estacion|estaciones|mppt|powmr|sumry|must|delta|apex|river|bateria|baterias|kwh)\b/.test(
+      joinedCorrected
+    )
+  ) {
+    departmentHints.push('solares');
   }
 
   const correctedQuery = correctedTokens.join(' ');
@@ -517,9 +537,24 @@ function tokenMatchesHaystack(token: string, hay: string, dept: Department): boo
         token === 'movilidad' ||
         token === 'virginia' ||
         token === 'triciclo' ||
-        token === 'motorina' ||
-        token === 'bateria') &&
+        token === 'motorina') &&
       dept === 'movilidad'
+    ) {
+      return true;
+    }
+    if (
+      (token === 'solar' ||
+        token === 'solares' ||
+        token === 'panel' ||
+        token === 'paneles' ||
+        token === 'inversor' ||
+        token === 'inversores' ||
+        token === 'estacion' ||
+        token === 'estaciones' ||
+        token === 'ecoflow' ||
+        token === 'bluetti' ||
+        token === 'lifepo4') &&
+      dept === 'solares'
     ) {
       return true;
     }
@@ -576,7 +611,9 @@ export function matchSmartProduct(
           ? 'moda shein mujer dama ropa'
           : product.department === 'movilidad'
             ? 'motos motorinas bicimotos triciclos baterias motores todo virginia movilidad'
-            : 'accesorios carteras relojes';
+            : product.department === 'solares'
+              ? 'equipos solares paneles inversores baterias lifepo4 estaciones energia ecoflow bluetti mppt'
+              : 'accesorios carteras relojes';
 
   const hay = normalizeText(
     `${product.sku} ${product.title} ${product.brand} ${categoryName} ${deptText} ${product.quality} ${product.fit_note} ${availableSizes.join(' ')}`

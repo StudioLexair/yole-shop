@@ -23,6 +23,7 @@ interface FilterSheetProps {
     hombre: number;
     accesorios: number;
     movilidad: number;
+    solares: number;
   };
   categories: Category[];
   categoryId: string;
@@ -208,6 +209,13 @@ export function FilterSheet({
                 onClick={() => onSelectDept('movilidad')}
               >
                 Motos &amp; Todo Virginia ({deptCounts.movilidad})
+              </button>
+              <button
+                type="button"
+                className={`chip${department === 'solares' ? ' is-active' : ''}`}
+                onClick={() => onSelectDept('solares')}
+              >
+                Equipos Solares ({deptCounts.solares})
               </button>
             </div>
 

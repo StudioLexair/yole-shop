@@ -18,6 +18,7 @@ import {
   buildWhatsAppProductLink,
   getDisplayPrice,
   isSheinProduct,
+  isSolarProduct,
 } from '../lib/pricing';
 import { getAvailableSizes, submitSizeRequest } from '../lib/catalog';
 import { downloadRemoteImage, shareProductLink } from '../lib/mediaHelpers';
@@ -275,9 +276,11 @@ export function ProductModal({
                 {priceInfo.secondary && <span className="modal-subprice">{priceInfo.secondary}</span>}
               </div>
 
-              {isSheinProduct(product) && (
+              {(isSheinProduct(product) || isSolarProduct(product)) && (
                 <div className="shein-cash-only-note" role="note">
-                  Solo pago en Efectivo CUP o USD (artículos Shein no admiten transferencia).
+                  {isSolarProduct(product)
+                    ? 'Solo pago en Efectivo CUP o USD (Equipos Solares no admiten transferencia).'
+                    : 'Solo pago en Efectivo CUP o USD (artículos Shein no admiten transferencia).'}
                 </div>
               )}
 
@@ -292,7 +295,7 @@ export function ProductModal({
                   <span>
                     {noSizesAvailable
                       ? 'Agotado temporalmente'
-                      : product.department === 'movilidad'
+                      : product.department === 'movilidad' || product.department === 'solares'
                         ? 'Disponibilidad / Opción:'
                         : 'Selecciona talla disponible:'}
                   </span>

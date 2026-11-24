@@ -32,6 +32,7 @@ interface BottomMenuSheetProps {
     hombre: number;
     accesorios: number;
     movilidad: number;
+    solares: number;
   };
   displayCurrency: Currency;
   themeMode?: ThemeMode;
@@ -229,6 +230,18 @@ export function BottomMenuSheet({
                 <span>Motos &amp; Todo Virginia</span>
                 <span className="sheet-nav-right">
                   <strong>{deptCounts.movilidad}</strong>
+                  <ChevronRight size={16} />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`sheet-nav-item${department === 'solares' ? ' is-active' : ''}`}
+                onClick={() => pickDept('solares')}
+              >
+                <span>Equipos Solares</span>
+                <span className="sheet-nav-right">
+                  <strong>{deptCounts.solares}</strong>
                   <ChevronRight size={16} />
                 </span>
               </button>

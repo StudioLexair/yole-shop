@@ -25,8 +25,39 @@ export function isSheinProduct(
   return (product.quality || '').trim().toUpperCase() === 'SHEIN';
 }
 
+export function isSolarProduct(
+  product: Partial<Pick<Product, 'department'>>
+): boolean {
+  return product.department === 'solares';
+}
+
+export function isTransferRestrictedProduct(
+  product: Pick<Product, 'department' | 'category_id' | 'source_group' | 'quality'>
+): boolean {
+  return isSheinProduct(product) || isSolarProduct(product);
+}
+
 export function cartHasSheinItems(items: CartItem[]): boolean {
   return items.some((it) => isSheinProduct(it.product));
+}
+
+export function cartHasTransferBlockedItems(items: CartItem[]): boolean {
+  return items.some((it) => isTransferRestrictedProduct(it.product));
+}
+
+export function cartTransferBlockReason(items: CartItem[]): string | null {
+  const hasShein = items.some((it) => isSheinProduct(it.product));
+  const hasSolar = items.some((it) => isSolarProduct(it.product));
+  if (hasShein && hasSolar) {
+    return 'Los artículos Shein y Equipos Solares no admiten pago por transferencia. Disponible solo Efectivo CUP o USD.';
+  }
+  if (hasSolar) {
+    return 'Los Equipos Solares no admiten pago por transferencia. Disponible solo Efectivo CUP o USD.';
+  }
+  if (hasShein) {
+    return 'Los productos de Shein no admiten pago por transferencia. Disponible solo Efectivo CUP o USD.';
+  }
+  return null;
 }
 
 export function isCupLockedFootwear(
@@ -230,7 +261,9 @@ export function summarizeCart(
   const discountedSubtotalUsd = Math.round((discountedSubtotalCup / rate) * 100) / 100;
 
   const effectivePayment: PaymentMethod =
-    cartHasSheinItems(items) && paymentMethod === 'transferencia' ? 'efectivo' : paymentMethod;
+    cartHasTransferBlockedItems(items) && paymentMethod === 'transferencia'
+      ? 'efectivo'
+      : paymentMethod;
 
   const deliveryFeeCup =
     deliveryType === 'domicilio' && items.length > 0 ? Math.round(settings.delivery_fee_cup) : 0;

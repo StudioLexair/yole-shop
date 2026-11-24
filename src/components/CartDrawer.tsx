@@ -21,7 +21,8 @@ import type {
 } from '../types';
 import {
   buildWhatsAppOrderLink,
-  cartHasSheinItems,
+  cartHasTransferBlockedItems,
+  cartTransferBlockReason,
   formatCup,
   formatUsd,
   getDisplayPrice,
@@ -86,15 +87,16 @@ export function CartDrawer({
   const [sentCode, setSentCode] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const hasSheinItems = cartHasSheinItems(items);
+  const transferBlocked = cartHasTransferBlockedItems(items);
+  const transferBlockMsg = cartTransferBlockReason(items);
   const effectivePaymentMethod: PaymentMethod =
-    hasSheinItems && paymentMethod === 'transferencia' ? 'efectivo' : paymentMethod;
+    transferBlocked && paymentMethod === 'transferencia' ? 'efectivo' : paymentMethod;
 
   useEffect(() => {
-    if (hasSheinItems && paymentMethod === 'transferencia') {
+    if (transferBlocked && paymentMethod === 'transferencia') {
       setPaymentMethod('efectivo');
     }
-  }, [hasSheinItems, paymentMethod]);
+  }, [transferBlocked, paymentMethod]);
 
   useEffect(() => {
     if (activeCoupon?.code) {
@@ -543,22 +545,17 @@ export function CartDrawer({
                     </button>
                     <button
                       type="button"
-                      disabled={hasSheinItems}
-                      title={
-                        hasSheinItems
-                          ? 'Los artículos de Shein no admiten pago por transferencia'
-                          : undefined
-                      }
+                      disabled={transferBlocked}
+                      title={transferBlockMsg || undefined}
                       className={effectivePaymentMethod === 'transferencia' ? 'is-active' : ''}
-                      onClick={() => !hasSheinItems && setPaymentMethod('transferencia')}
+                      onClick={() => !transferBlocked && setPaymentMethod('transferencia')}
                     >
                       Transf. (+{settings.transfer_surcharge_pct}%)
                     </button>
                   </div>
-                  {hasSheinItems && (
+                  {transferBlockMsg && (
                     <p className="shein-cash-only-note" role="note">
-                      Los productos de Shein no admiten pago por transferencia. Disponible solo
-                      Efectivo CUP o USD.
+                      {transferBlockMsg}
                     </p>
                   )}
                 </div>
