@@ -1,16 +1,24 @@
 import { Check, Heart, SlidersHorizontal, Tag, Trash2, X } from 'lucide-react';
 import type { Category, Department } from '../types';
-import type { PriceRangeFilter, SortMode } from '../lib/catalog';
+import type {
+  CalzadoSubFilter,
+  PriceRangeFilter,
+  SheinSubFilter,
+  SortMode,
+} from '../lib/catalog';
 
 interface FilterSheetProps {
   open: boolean;
   onClose: () => void;
   totalResults: number;
   department: Department | 'all';
-  sheinGender: 'all' | 'mujer' | 'hombre';
+  calzadoSub: CalzadoSubFilter;
+  sheinGender: SheinSubFilter;
   deptCounts: {
     all: number;
     calzado: number;
+    calzadoTenis: number;
+    calzadoShein: number;
     moda_shein: number;
     hombre: number;
     accesorios: number;
@@ -26,7 +34,8 @@ interface FilterSheetProps {
   onlyFavorites: boolean;
   favoriteCount: number;
   onSelectDept: (dep: Department | 'all') => void;
-  onSelectSheinGender: (g: 'all' | 'mujer' | 'hombre') => void;
+  onSelectCalzadoSub: (sub: CalzadoSubFilter) => void;
+  onSelectSheinGender: (g: SheinSubFilter) => void;
   onSelectCategory: (id: string) => void;
   onSelectSize: (sz: string) => void;
   onSelectPriceRange: (pr: PriceRangeFilter) => void;
@@ -41,6 +50,7 @@ export function FilterSheet({
   onClose,
   totalResults,
   department,
+  calzadoSub,
   sheinGender,
   deptCounts,
   categories,
@@ -53,6 +63,7 @@ export function FilterSheet({
   onlyFavorites,
   favoriteCount,
   onSelectDept,
+  onSelectCalzadoSub,
   onSelectSheinGender,
   onSelectCategory,
   onSelectSize,
@@ -200,9 +211,29 @@ export function FilterSheet({
               </button>
             </div>
 
+            {department === 'calzado' && deptCounts.calzadoShein > 0 && (
+              <div className="filter-subgender">
+                <span>Línea:</span>
+                <button
+                  type="button"
+                  className={`chip chip--sm${calzadoSub === 'tenis' ? ' is-active' : ''}`}
+                  onClick={() => onSelectCalzadoSub('tenis')}
+                >
+                  Tenis 3A &amp; G5 ({deptCounts.calzadoTenis})
+                </button>
+                <button
+                  type="button"
+                  className={`chip chip--sm${calzadoSub === 'zuecos' ? ' is-active' : ''}`}
+                  onClick={() => onSelectCalzadoSub('zuecos')}
+                >
+                  Zuecos &amp; Sandalias Shein ({deptCounts.calzadoShein})
+                </button>
+              </div>
+            )}
+
             {department === 'moda_shein' && (
               <div className="filter-subgender">
-                <span>Género:</span>
+                <span>Sección:</span>
                 <button
                   type="button"
                   className={`chip chip--sm${sheinGender === 'all' ? ' is-active' : ''}`}
@@ -224,6 +255,15 @@ export function FilterSheet({
                 >
                   Hombre ({deptCounts.hombre})
                 </button>
+                {deptCounts.calzadoShein > 0 && (
+                  <button
+                    type="button"
+                    className={`chip chip--sm${sheinGender === 'zuecos' ? ' is-active' : ''}`}
+                    onClick={() => onSelectSheinGender('zuecos')}
+                  >
+                    Zuecos &amp; Sandalias ({deptCounts.calzadoShein})
+                  </button>
+                )}
               </div>
             )}
           </div>

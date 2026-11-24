@@ -26,12 +26,17 @@ import {
 
 export type SortMode = 'featured' | 'price_asc' | 'price_desc' | 'newest';
 
-export type DepartmentFilter = Department | 'all' | 'shein_all';
+export type DepartmentFilter = Department | 'all' | 'shein_all' | 'calzado_shein';
+
+export type CalzadoSubFilter = 'tenis' | 'zuecos' | 'all';
+
+export type SheinSubFilter = 'all' | 'mujer' | 'hombre' | 'zuecos';
 
 export type PriceRangeFilter = 'all' | 'under15' | '15to30' | 'over30';
 
 export interface CatalogFilters {
   department: DepartmentFilter;
+  calzadoSub?: CalzadoSubFilter;
   categoryId: string;
   size: string;
   search: string;
@@ -103,8 +108,14 @@ export function filterProducts(
     if (!filters.includeSoldOut && p.status === 'sold_out') return false;
     if (filters.department === 'shein_all') {
       if (p.department !== 'moda_shein' && p.department !== 'hombre') return false;
+    } else if (filters.department === 'calzado_shein') {
+      if (p.category_id !== 'zuecos-sandalias') return false;
     } else if (filters.department !== 'all' && p.department !== filters.department) {
       return false;
+    }
+    if (filters.department === 'calzado') {
+      if (filters.calzadoSub === 'tenis' && p.category_id === 'zuecos-sandalias') return false;
+      if (filters.calzadoSub === 'zuecos' && p.category_id !== 'zuecos-sandalias') return false;
     }
     if (filters.categoryId !== 'all' && p.category_id !== filters.categoryId) return false;
     const availSizes = getAvailableSizes(p);

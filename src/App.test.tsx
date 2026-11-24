@@ -2,11 +2,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from './App';
 import { SplashLoader } from './components/SplashLoader';
-import { writeCachedStoreData } from './lib/catalog';
+import { fetchStoreData, writeCachedStoreData } from './lib/catalog';
 import { DEFAULT_SETTINGS, type Category, type Product } from './types';
 
 const mockCategories: Category[] = [
   { id: 'tenis-new-balance', name: 'New Balance', department: 'calzado', sort_order: 10 },
+  { id: 'zuecos-sandalias', name: 'Zuecos & Sandalias', department: 'calzado', sort_order: 18 },
   { id: 'vestidos-shein', name: 'Vestidos Shein', department: 'moda_shein', sort_order: 20 },
   { id: 'moda-hombre', name: 'Moda Hombre', department: 'hombre', sort_order: 30 },
   { id: 'bolsos-relojes', name: 'Accesorios', department: 'accesorios', sort_order: 40 },
@@ -116,6 +117,27 @@ const mockProducts: Product[] = [
     sort_order: 2700,
   },
 ];
+
+const sampleZuecoShein: Product = {
+  id: 'p6',
+  sku: 'YOL-183',
+  title: 'Zuecos Café Claro Doble Hebilla',
+  brand: 'SHEIN',
+  department: 'calzado',
+  category_id: 'zuecos-sandalias',
+  quality: 'Importado',
+  currency: 'USD',
+  cost_price: 12,
+  price: 14,
+  sizes: ['37', '38'],
+  fit_note: '',
+  image_url: 'https://example.com/zueco.webp',
+  image_path: 'catalog/YOL-183.webp',
+  status: 'active',
+  featured: false,
+  source_group: 'shein_moda',
+  sort_order: 15,
+};
 
 vi.mock('./lib/catalog', async () => {
   const actual = await vi.importActual<typeof import('./lib/catalog')>('./lib/catalog');
@@ -425,5 +447,51 @@ describe('Yole Shop App', () => {
     expect(
       within(cartDialog).getByText(/Los productos de Shein no admiten pago por transferencia/i)
     ).toBeInTheDocument();
+  });
+
+  it('separa Tenis 3A & G5 de Zuecos & Sandalias Shein en Calzado, los muestra también en Moda Shein y bloquea transferencia', async () => {
+    vi.mocked(fetchStoreData).mockResolvedValueOnce({
+      settings: DEFAULT_SETTINGS,
+      categories: mockCategories,
+      products: [...mockProducts, sampleZuecoShein],
+      pricePresets: [],
+    });
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getAllByText('New Balance 9060 Blanco & Rosa').length).toBeGreaterThan(0);
+    });
+
+    // Entrar a Calzado & Tenis: por defecto muestra Tenis 3A & G5 y oculta los zuecos Shein
+    const nav = screen.getByRole('navigation', { name: 'Departamentos' });
+    fireEvent.click(within(nav).getByRole('button', { name: /Calzado & Tenis/i }));
+    const calzadoBar = screen.getByRole('group', { name: 'Línea de calzado' });
+    expect(within(calzadoBar).getByRole('button', { name: /Tenis 3A & G5/i }).className).toContain('is-active');
+    expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+    expect(screen.queryByText('Zuecos Café Claro Doble Hebilla')).not.toBeInTheDocument();
+
+    // Al pulsar Zuecos & Sandalias Shein dentro de Calzado -> muestra solo los zuecos con badge SHEIN
+    fireEvent.click(within(calzadoBar).getByRole('button', { name: /Zuecos & Sandalias/i }));
+    expect(screen.getByText('Zuecos Café Claro Doble Hebilla')).toBeInTheDocument();
+    expect(screen.queryByText('New Balance 9060 Blanco & Rosa')).not.toBeInTheDocument();
+
+    // También aparece dentro de Moda Shein -> chip Zuecos & Sandalias
+    fireEvent.click(within(nav).getByRole('button', { name: /Moda Shein/i }));
+    const sheinBar = screen.getByRole('group', { name: 'Sección Moda Shein' });
+    fireEvent.click(within(sheinBar).getByRole('button', { name: /Zuecos & Sandalias/i }));
+    expect(screen.getByText('Zuecos Café Claro Doble Hebilla')).toBeInTheDocument();
+
+    // Al añadir el zueco al carrito, se bloquea Transferencia
+    fireEvent.click(screen.getByText('Zuecos Café Claro Doble Hebilla'));
+    const modal = screen.getByRole('dialog');
+    expect(
+      within(modal).getByText(/artículos Shein no admiten transferencia/i)
+    ).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('button', { name: /Agregar al carrito/i }));
+    fireEvent.click(within(modal).getByRole('button', { name: 'Cerrar' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
+    const cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    expect(within(cartDialog).getByRole('button', { name: /Transf\./i })).toBeDisabled();
   });
 });

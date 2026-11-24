@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Currency, Department, StoreSettings } from '../types';
-import type { ThemeMode } from '../lib/catalog';
+import type { SheinSubFilter, ThemeMode } from '../lib/catalog';
 import { formatCup } from '../lib/pricing';
 
 interface BottomMenuSheetProps {
@@ -22,10 +22,12 @@ interface BottomMenuSheetProps {
   onClose: () => void;
   settings: StoreSettings;
   department: Department | 'all';
-  sheinGender: 'all' | 'mujer' | 'hombre';
+  sheinGender: SheinSubFilter;
   deptCounts: {
     all: number;
     calzado: number;
+    calzadoTenis: number;
+    calzadoShein: number;
     moda_shein: number;
     hombre: number;
     accesorios: number;
@@ -38,7 +40,7 @@ interface BottomMenuSheetProps {
   onlyFavorites?: boolean;
   onToggleFavorites?: () => void;
   onSelectDept: (dep: Department | 'all') => void;
-  onSelectSheinGender: (g: 'all' | 'mujer' | 'hombre') => void;
+  onSelectSheinGender: (g: SheinSubFilter) => void;
   onChangeCurrency: (c: Currency) => void;
   onOpenTracker: () => void;
   directWaUrl: string;
@@ -78,7 +80,7 @@ export function BottomMenuSheet({
     onClose();
   };
 
-  const pickShein = (g: 'all' | 'mujer' | 'hombre') => {
+  const pickShein = (g: SheinSubFilter) => {
     if (department !== 'moda_shein') {
       onSelectDept('moda_shein');
     }
@@ -195,6 +197,15 @@ export function BottomMenuSheet({
                   >
                     Hombre ({deptCounts.hombre})
                   </button>
+                  {deptCounts.calzadoShein > 0 && (
+                    <button
+                      type="button"
+                      className={`chip${department === 'moda_shein' && sheinGender === 'zuecos' ? ' is-active' : ''}`}
+                      onClick={() => pickShein('zuecos')}
+                    >
+                      Zuecos &amp; Sandalias ({deptCounts.calzadoShein})
+                    </button>
+                  )}
                 </div>
               </div>
 

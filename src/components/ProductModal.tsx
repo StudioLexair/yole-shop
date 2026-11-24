@@ -17,7 +17,7 @@ import type { Currency, Product, StoreSettings } from '../types';
 import {
   buildWhatsAppProductLink,
   getDisplayPrice,
-  isSheinDepartment,
+  isSheinProduct,
 } from '../lib/pricing';
 import { getAvailableSizes, submitSizeRequest } from '../lib/catalog';
 import { downloadRemoteImage, shareProductLink } from '../lib/mediaHelpers';
@@ -275,7 +275,7 @@ export function ProductModal({
                 {priceInfo.secondary && <span className="modal-subprice">{priceInfo.secondary}</span>}
               </div>
 
-              {isSheinDepartment(product.department) && (
+              {isSheinProduct(product) && (
                 <div className="shein-cash-only-note" role="note">
                   Solo pago en Efectivo CUP o USD (artículos Shein no admiten transferencia).
                 </div>

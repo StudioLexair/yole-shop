@@ -15,8 +15,18 @@ export function isSheinDepartment(dept: Department | undefined): boolean {
   return dept === 'moda_shein' || dept === 'hombre';
 }
 
+export function isSheinProduct(
+  product: Pick<Product, 'department' | 'category_id' | 'source_group' | 'quality'>
+): boolean {
+  if (isSheinDepartment(product.department)) return true;
+  if (product.category_id === 'zuecos-sandalias') return true;
+  const sg = (product.source_group || '').toLowerCase();
+  if (sg.startsWith('shein')) return true;
+  return (product.quality || '').trim().toUpperCase() === 'SHEIN';
+}
+
 export function cartHasSheinItems(items: CartItem[]): boolean {
-  return items.some((it) => isSheinDepartment(it.product.department));
+  return items.some((it) => isSheinProduct(it.product));
 }
 
 export function resolveProductImageUrl(sku: string, imageUrl?: string): string {

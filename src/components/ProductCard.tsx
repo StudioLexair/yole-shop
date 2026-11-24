@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Eye, Film, Heart, Images, MessageCircle, ShoppingBag } from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
-import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
+import { buildWhatsAppProductLink, getDisplayPrice, isSheinProduct } from '../lib/pricing';
 import { getAvailableSizes } from '../lib/catalog';
 import { SmartImage } from './SmartImage';
 
@@ -105,9 +105,15 @@ export function ProductCard({
           />
         )}
         <div className="p-card__badges">
-          {product.quality && (
-            <span className={`p-badge p-badge--qual${product.quality === 'G5' ? ' is-g5' : ''}`}>
-              {product.quality}
+          {(product.category_id === 'zuecos-sandalias' || product.quality) && (
+            <span
+              className={`p-badge p-badge--qual${product.quality === 'G5' ? ' is-g5' : ''}${
+                product.category_id === 'zuecos-sandalias' || isSheinProduct(product)
+                  ? ' is-shein'
+                  : ''
+              }`}
+            >
+              {product.category_id === 'zuecos-sandalias' ? 'SHEIN' : product.quality}
             </span>
           )}
           {product.featured && !isSoldOut && (

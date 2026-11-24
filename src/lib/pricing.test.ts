@@ -7,6 +7,7 @@ import {
   formatWhatsAppOrderText,
   getDisplayPrice,
   isSheinDepartment,
+  isSheinProduct,
   normalizeWhatsAppDigits,
   summarizeCart,
 } from './pricing';
@@ -238,5 +239,31 @@ describe('pricing & WhatsApp helpers', () => {
       'transferencia'
     );
     expect(onlyShoe.transferFeeCup).toBe(7000);
+
+    // Zuecos y sandalias Shein dentro de departamento calzado también cuentan como Shein
+    const sampleZuecoShein: Product = {
+      ...sampleShoe,
+      id: '4',
+      sku: 'YOL-183',
+      title: 'Zuecos Café Claro Doble Hebilla',
+      brand: 'SHEIN',
+      department: 'calzado',
+      category_id: 'zuecos-sandalias',
+      quality: 'Importado',
+      currency: 'USD',
+      cost_price: 12,
+      price: 14,
+      source_group: 'shein_moda',
+    };
+    expect(isSheinProduct(sampleZuecoShein)).toBe(true);
+    expect(isSheinProduct(sampleShoe)).toBe(false);
+    expect(cartHasSheinItems([{ product: sampleZuecoShein, size: '38', qty: 1 }])).toBe(true);
+    const zuecoSummary = summarizeCart(
+      [{ product: sampleZuecoShein, size: '38', qty: 1 }],
+      DEFAULT_SETTINGS,
+      'recogida',
+      'transferencia'
+    );
+    expect(zuecoSummary.transferFeeCup).toBe(0);
   });
 });

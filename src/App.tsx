@@ -38,8 +38,10 @@ import {
   writeCachedStoreData,
   writeFavoriteSkus,
   writeThemeMode,
+  type CalzadoSubFilter,
   type DepartmentFilter,
   type PriceRangeFilter,
+  type SheinSubFilter,
   type SortMode,
   type ThemeMode,
 } from './lib/catalog';
@@ -111,7 +113,8 @@ export function App() {
 
   const [isAdmin, setIsAdmin] = useState<boolean>(isAdminPath);
   const [department, setDepartment] = useState<Department | 'all'>('all');
-  const [sheinGender, setSheinGender] = useState<'all' | 'mujer' | 'hombre'>('all');
+  const [calzadoSub, setCalzadoSub] = useState<CalzadoSubFilter>('tenis');
+  const [sheinGender, setSheinGender] = useState<SheinSubFilter>('all');
   const [categoryId, setCategoryId] = useState<string>('all');
   const [sizeFilter, setSizeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -361,12 +364,26 @@ export function App() {
   };
 
   const deptCounts = useMemo(() => {
-    const counts = { all: 0, calzado: 0, moda_shein: 0, hombre: 0, accesorios: 0, movilidad: 0 };
+    const counts = {
+      all: 0,
+      calzado: 0,
+      calzadoTenis: 0,
+      calzadoShein: 0,
+      moda_shein: 0,
+      hombre: 0,
+      accesorios: 0,
+      movilidad: 0,
+    };
     for (const p of products) {
       if (p.status === 'hidden') continue;
       if (!settings.show_sold_out_public && p.status === 'sold_out') continue;
       counts.all += 1;
       counts[p.department] += 1;
+      if (p.category_id === 'zuecos-sandalias') {
+        counts.calzadoShein += 1;
+      } else if (p.department === 'calzado') {
+        counts.calzadoTenis += 1;
+      }
     }
     return counts;
   }, [products, settings.show_sold_out_public]);
@@ -375,6 +392,7 @@ export function App() {
     if (department === 'moda_shein') {
       if (sheinGender === 'mujer') return 'moda_shein';
       if (sheinGender === 'hombre') return 'hombre';
+      if (sheinGender === 'zuecos') return 'calzado_shein';
       return 'shein_all';
     }
     return department;
@@ -382,15 +400,26 @@ export function App() {
 
   const visibleCategories = useMemo(() => {
     if (department === 'all') return categories;
+    if (department === 'calzado') {
+      if (calzadoSub === 'tenis') {
+        return categories.filter(
+          (c) => c.department === 'calzado' && c.id !== 'zuecos-sandalias'
+        );
+      }
+      if (calzadoSub === 'zuecos') {
+        return categories.filter((c) => c.id === 'zuecos-sandalias');
+      }
+    }
     if (department === 'moda_shein') {
       if (sheinGender === 'mujer') return categories.filter((c) => c.department === 'moda_shein');
       if (sheinGender === 'hombre') return categories.filter((c) => c.department === 'hombre');
+      if (sheinGender === 'zuecos') return categories.filter((c) => c.id === 'zuecos-sandalias');
       return categories.filter(
         (c) => c.department === 'moda_shein' || c.department === 'hombre'
       );
     }
     return categories.filter((c) => c.department === department);
-  }, [categories, department, sheinGender]);
+  }, [categories, department, calzadoSub, sheinGender]);
 
   const deptScopedProducts = useMemo(() => {
     return products.filter((p) => {
@@ -398,13 +427,19 @@ export function App() {
       if (!settings.show_sold_out_public && p.status === 'sold_out') return false;
       if (activeDeptFilter === 'shein_all') {
         if (p.department !== 'moda_shein' && p.department !== 'hombre') return false;
+      } else if (activeDeptFilter === 'calzado_shein') {
+        if (p.category_id !== 'zuecos-sandalias') return false;
       } else if (activeDeptFilter !== 'all' && p.department !== activeDeptFilter) {
         return false;
+      }
+      if (activeDeptFilter === 'calzado') {
+        if (calzadoSub === 'tenis' && p.category_id === 'zuecos-sandalias') return false;
+        if (calzadoSub === 'zuecos' && p.category_id !== 'zuecos-sandalias') return false;
       }
       if (categoryId !== 'all' && p.category_id !== categoryId) return false;
       return true;
     });
-  }, [products, settings.show_sold_out_public, activeDeptFilter, categoryId]);
+  }, [products, settings.show_sold_out_public, activeDeptFilter, calzadoSub, categoryId]);
 
   const availableSizes = useMemo(
     () => collectAvailableSizes(deptScopedProducts),
@@ -500,6 +535,7 @@ export function App() {
       products,
       {
         department: effectiveSearchDept,
+        calzadoSub: !search.trim() && department === 'calzado' ? calzadoSub : 'all',
         categoryId,
         size: sizeFilter,
         search,
@@ -519,6 +555,8 @@ export function App() {
     categories,
     searchLexicon,
     effectiveSearchDept,
+    department,
+    calzadoSub,
     categoryId,
     sizeFilter,
     search,
@@ -533,6 +571,7 @@ export function App() {
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
+    if (department === 'calzado' && calzadoSub === 'zuecos') count += 1;
     if (sheinGender !== 'all') count += 1;
     if (categoryId !== 'all') count += 1;
     if (sizeFilter !== 'all') count += 1;
@@ -541,10 +580,11 @@ export function App() {
     if (onlyFavorites) count += 1;
     if (sort !== 'featured') count += 1;
     return count;
-  }, [sheinGender, categoryId, sizeFilter, priceRange, onlyPriced, onlyFavorites, sort]);
+  }, [department, calzadoSub, sheinGender, categoryId, sizeFilter, priceRange, onlyPriced, onlyFavorites, sort]);
 
   const clearAllFilters = useCallback(() => {
     setDepartment('all');
+    setCalzadoSub('tenis');
     setSheinGender('all');
     setCategoryId('all');
     setSizeFilter('all');
@@ -563,6 +603,7 @@ export function App() {
 
   const handleSelectDept = (nextDept: Department | 'all') => {
     setDepartment(nextDept);
+    setCalzadoSub('tenis');
     setSheinGender('all');
     setCategoryId('all');
     setSizeFilter('all');
@@ -570,7 +611,14 @@ export function App() {
     setVisibleLimit(PAGE_STEP);
   };
 
-  const handleSelectSheinGender = (nextGender: 'all' | 'mujer' | 'hombre') => {
+  const handleSelectCalzadoSub = (nextSub: CalzadoSubFilter) => {
+    setCalzadoSub(nextSub);
+    setCategoryId('all');
+    setSizeFilter('all');
+    setVisibleLimit(PAGE_STEP);
+  };
+
+  const handleSelectSheinGender = (nextGender: SheinSubFilter) => {
     setSheinGender(nextGender);
     setCategoryId('all');
     setSizeFilter('all');
@@ -1108,6 +1156,70 @@ export function App() {
           </div>
         )}
 
+        {/* Selector de sub-líneas limpio en Calzado & Moda Shein (Opción 3) */}
+        {!search.trim() && department === 'calzado' && deptCounts.calzadoShein > 0 && (
+          <div className="dept-subbar" role="group" aria-label="Línea de calzado">
+            <button
+              type="button"
+              className={`dept-subpill${calzadoSub === 'tenis' ? ' is-active' : ''}`}
+              onClick={() => handleSelectCalzadoSub('tenis')}
+            >
+              <span>Tenis 3A &amp; G5</span>
+              <span className="dept-subpill__count">{deptCounts.calzadoTenis}</span>
+            </button>
+            <button
+              type="button"
+              className={`dept-subpill${calzadoSub === 'zuecos' ? ' is-active' : ''}`}
+              onClick={() => handleSelectCalzadoSub('zuecos')}
+            >
+              <span>Zuecos &amp; Sandalias</span>
+              <span className="dept-subpill__tag">SHEIN</span>
+              <span className="dept-subpill__count">{deptCounts.calzadoShein}</span>
+            </button>
+          </div>
+        )}
+
+        {!search.trim() && department === 'moda_shein' && (
+          <div className="dept-subbar" role="group" aria-label="Sección Moda Shein">
+            <button
+              type="button"
+              className={`dept-subpill${sheinGender === 'all' ? ' is-active' : ''}`}
+              onClick={() => handleSelectSheinGender('all')}
+            >
+              <span>Todo</span>
+              <span className="dept-subpill__count">
+                {deptCounts.moda_shein + deptCounts.hombre}
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`dept-subpill${sheinGender === 'mujer' ? ' is-active' : ''}`}
+              onClick={() => handleSelectSheinGender('mujer')}
+            >
+              <span>Mujer</span>
+              <span className="dept-subpill__count">{deptCounts.moda_shein}</span>
+            </button>
+            <button
+              type="button"
+              className={`dept-subpill${sheinGender === 'hombre' ? ' is-active' : ''}`}
+              onClick={() => handleSelectSheinGender('hombre')}
+            >
+              <span>Hombre</span>
+              <span className="dept-subpill__count">{deptCounts.hombre}</span>
+            </button>
+            {deptCounts.calzadoShein > 0 && (
+              <button
+                type="button"
+                className={`dept-subpill${sheinGender === 'zuecos' ? ' is-active' : ''}`}
+                onClick={() => handleSelectSheinGender('zuecos')}
+              >
+                <span>Zuecos &amp; Sandalias</span>
+                <span className="dept-subpill__count">{deptCounts.calzadoShein}</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Active removable filter pills (only shown when user has filters applied) */}
         {(activeFilterCount > 0 || parsedSearch?.priceIntentLabel) && (
           <div className="active-filter-pills" aria-label="Filtros activos">
@@ -1116,13 +1228,28 @@ export function App() {
                 <Sparkles size={12} /> {parsedSearch.priceIntentLabel}
               </span>
             )}
+            {department === 'calzado' && calzadoSub === 'zuecos' && (
+              <button
+                type="button"
+                className="active-pill"
+                onClick={() => handleSelectCalzadoSub('tenis')}
+              >
+                Zuecos &amp; Sandalias Shein <X size={12} />
+              </button>
+            )}
             {sheinGender !== 'all' && (
               <button
                 type="button"
                 className="active-pill"
                 onClick={() => setSheinGender('all')}
               >
-                Moda: {sheinGender === 'mujer' ? 'Mujer' : 'Hombre'} <X size={12} />
+                Moda:{' '}
+                {sheinGender === 'mujer'
+                  ? 'Mujer'
+                  : sheinGender === 'hombre'
+                    ? 'Hombre'
+                    : 'Zuecos & Sandalias'}{' '}
+                <X size={12} />
               </button>
             )}
             {categoryId !== 'all' && (
@@ -1495,6 +1622,7 @@ export function App() {
         onClose={() => setFilterOpen(false)}
         totalResults={filteredProducts.length}
         department={department}
+        calzadoSub={calzadoSub}
         sheinGender={sheinGender}
         deptCounts={deptCounts}
         categories={visibleCategories}
@@ -1507,6 +1635,7 @@ export function App() {
         onlyFavorites={onlyFavorites}
         favoriteCount={favoriteSkus.length}
         onSelectDept={handleSelectDept}
+        onSelectCalzadoSub={handleSelectCalzadoSub}
         onSelectSheinGender={handleSelectSheinGender}
         onSelectCategory={(id) => {
           setCategoryId(id);
