@@ -289,8 +289,7 @@ export function CartDrawer({
   const deliveryFeeUsd = Math.round((summary.deliveryFeeCup / rate) * 100) / 100;
   const transferFeeUsd = Math.round((summary.transferFeeCup / rate) * 100) / 100;
   const totalUsdWithExtras = Math.round((summary.totalCupWithExtras / rate) * 100) / 100;
-  const totalUsdWithZone =
-    totalUsdWithExtras + (deliveryType === 'domicilio' && shippingEst.feeUsd ? shippingEst.feeUsd : 0);
+  const totalUsdWithZone = totalUsdWithExtras;
   const channelTotal = formatChannelTotal(totalUsdWithZone, paymentChannel, settings);
 
   const handleDownloadCartPdf = async () => {
@@ -306,7 +305,7 @@ export function CartDrawer({
         settings,
         reseller,
         shippingLabel: shippingEst.label,
-        shippingFeeUsd: deliveryType === 'domicilio' ? shippingEst.feeUsd : 0,
+        shippingFeeUsd: 0,
         customerName: customerName.trim() || undefined,
         referralCode: referralCode || undefined,
       });
@@ -519,13 +518,13 @@ export function CartDrawer({
                       </strong>
                     </div>
                   )}
-                  {summary.deliveryFeeCup > 0 && (
+                  {deliveryType === 'domicilio' && (
                     <div className="sum-row">
-                      <span>Domicilio base ({settings.location_text.split('·')[0].trim()})</span>
+                      <span>Domicilio base (puede costar más según tienda/zona)</span>
                       <span>
-                        {summaryInUsd
-                          ? formatUsd(deliveryFeeUsd)
-                          : formatCup(summary.deliveryFeeCup)}
+                        {summary.deliveryFeeCup > 0
+                          ? `Desde ${summaryInUsd ? formatUsd(deliveryFeeUsd) : formatCup(summary.deliveryFeeCup)} · a consultar`
+                          : 'A consultar'}
                       </span>
                     </div>
                   )}
@@ -554,6 +553,13 @@ export function CartDrawer({
                           : formatCup(summary.totalCupWithExtras)}
                       </strong>
                     </div>
+                  )}
+                  {deliveryType === 'domicilio' && (
+                    <p className="sum-note">
+                      El envío mostrado es solo un <strong>precio base orientativo</strong>: cada
+                      tienda usa mensajería distinta y el costo final puede ser mayor según tu
+                      reparto en Santa Clara o municipio exterior (confirmado antes de salir).
+                    </p>
                   )}
                   {summary.hasUnpricedItems && (
                     <p className="sum-note">
@@ -610,7 +616,9 @@ export function CartDrawer({
                       className={deliveryType === 'domicilio' ? 'is-active' : ''}
                       onClick={() => setDeliveryType('domicilio')}
                     >
-                      A domicilio ({formatCup(settings.delivery_fee_cup)})
+                      {settings.delivery_fee_cup > 0
+                        ? `A domicilio (base ${formatCup(settings.delivery_fee_cup)} · a consultar)`
+                        : 'A domicilio (A consultar)'}
                     </button>
                     <button
                       type="button"
@@ -625,7 +633,7 @@ export function CartDrawer({
                 {deliveryType === 'domicilio' && (
                   <>
                     <label className="field">
-                      <span>Zona / Municipio de entrega (Flete estimado)</span>
+                      <span>Zona / Municipio de entrega (Precio base orientativo)</span>
                       <select
                         value={shippingZoneId}
                         onChange={(e) => setShippingZoneId(e.target.value)}
@@ -636,7 +644,9 @@ export function CartDrawer({
                           </option>
                         ))}
                       </select>
-                      <small className="field-hint">{shippingEst.label}</small>
+                      <small className="field-hint">
+                        {shippingEst.label} · Puede variar según tienda de origen y reparto exacto.
+                      </small>
                     </label>
                     <label className="field">
                       <span>Dirección / Reparto *</span>

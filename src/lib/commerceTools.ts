@@ -127,7 +127,7 @@ export function calculateShippingEstimate(
     feeUsd,
     label:
       feeUsd !== null
-        ? `${isHeavy ? 'Flete pesado' : 'Paquetería'} (${zone.label}): ~$${feeUsd} USD · ${zone.eta}`
+        ? `${isHeavy ? 'Flete pesado base' : 'Envío base'} (${zone.label}): desde ~$${feeUsd} USD · a consultar según tienda/reparto (${zone.eta})`
         : `${zone.heavyNote} · ${zone.eta}`,
   };
 }
@@ -651,9 +651,10 @@ export async function downloadFormalQuotePdf(params: {
   const grandCup = Math.round(grandUsd * (params.settings.usd_to_cup_rate || 980));
 
   ctx.fillStyle = '#334155';
-  ctx.font = '600 24px system-ui, sans-serif';
+  ctx.font = '600 22px system-ui, sans-serif';
   ctx.fillText(
-    params.shippingLabel || 'Entrega / Flete: A coordinar según municipio',
+    params.shippingLabel ||
+      'Domicilio: precio base orientativo (sujeto a tienda, reparto o municipio)',
     100,
     boxY + 52
   );

@@ -187,7 +187,10 @@ export function BottomMenuSheet({
               <MapPin size={13} /> {settings.location_text}
             </span>
             <span>
-              <Truck size={13} /> Domicilio base {formatCup(settings.delivery_fee_cup)}
+              <Truck size={13} />{' '}
+              {settings.delivery_fee_cup > 0
+                ? `Domicilio base ${formatCup(settings.delivery_fee_cup)} (a consultar por tienda/zona)`
+                : 'Domicilio: A consultar según tienda y zona'}
             </span>
           </div>
 

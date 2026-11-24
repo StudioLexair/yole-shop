@@ -2559,7 +2559,7 @@ export function AdminView({
                 />
               </label>
               <label className="field">
-                <span>Tarifa domicilio base (CUP)</span>
+                <span>Tarifa domicilio base orientativa (CUP · 0 = solo &ldquo;A consultar&rdquo;)</span>
                 <input
                   type="number"
                   value={cfg.delivery_fee_cup}
@@ -2567,6 +2567,9 @@ export function AdminView({
                     setCfg({ ...cfg, delivery_fee_cup: Number(e.target.value) || 0 })
                   }
                 />
+                <small className="field-hint">
+                  Se advierte al cliente que es un precio base orientativo y puede costar más según tienda/almacén, reparto o municipio.
+                </small>
               </label>
               <label className="field">
                 <span>Recargo transferencia (%)</span>

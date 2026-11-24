@@ -445,8 +445,8 @@ export function formatWhatsAppOrderText(params: {
   const deliveryFeeValue =
     params.deliveryType === 'domicilio'
       ? params.summary.deliveryFeeCup > 0
-        ? `${Math.round(params.summary.deliveryFeeCup)} CUP`
-        : ''
+        ? `Desde ${Math.round(params.summary.deliveryFeeCup)} CUP (precio base · a consultar según tienda y zona)`
+        : 'A consultar según tienda y zona'
       : 'Recogida (0 CUP)';
 
   const paymentValue =
