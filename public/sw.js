@@ -1,10 +1,9 @@
-const CACHE_SHELL = 'yole-shell-v9';
-const CACHE_MEDIA = 'yole-media-v9';
-const CACHE_API = 'yole-api-v9';
+const CACHE_SHELL = 'yole-shell-v10';
+const CACHE_MEDIA = 'yole-media-v10';
+const CACHE_API = 'yole-api-v10';
 
 const SHELL_URLS = [
   '/',
-  '/index.html',
   '/manifest.webmanifest',
   '/favicon.svg',
   '/icon-192.png',
@@ -12,9 +11,29 @@ const SHELL_URLS = [
   '/apple-touch-icon.png',
 ];
 
+function stripRedirect(response) {
+  if (!response || !response.redirected) return response;
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers),
+  });
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_SHELL).then((cache) => cache.addAll(SHELL_URLS)).catch(() => undefined)
+    caches
+      .open(CACHE_SHELL)
+      .then((cache) =>
+        Promise.all(
+          SHELL_URLS.map((u) =>
+            fetch(u)
+              .then((res) => (res && res.ok ? cache.put(u, stripRedirect(res)) : undefined))
+              .catch(() => undefined)
+          )
+        )
+      )
+      .catch(() => undefined)
   );
   self.skipWaiting();
 });
@@ -37,17 +56,17 @@ async function staleWhileRevalidate(event, request, cacheName, fallbackUrl) {
     (await cache.match(request)) || (fallbackUrl ? await cache.match(fallbackUrl) : null);
   const cached =
     rawCached && (request.mode !== 'cors' || rawCached.type !== 'opaque')
-      ? rawCached
+      ? stripRedirect(rawCached)
       : null;
 
   const isOffline = typeof self.navigator !== 'undefined' && self.navigator.onLine === false;
   if (isOffline && (cached || rawCached)) {
-    return cached || rawCached;
+    return stripRedirect(cached || rawCached);
   }
 
   const networkPromise = fetch(request)
     .then((response) => {
-      if (response && response.ok) {
+      if (response && response.ok && !response.redirected) {
         cache.put(request, response.clone()).catch(() => undefined);
       }
       return response;
@@ -70,20 +89,21 @@ async function networkFirstWithCache(request, cacheName, fallbackUrl) {
   if (!isOffline) {
     try {
       const response = await fetch(request);
-      if (response && response.ok) {
-        cache.put(request, response.clone()).catch(() => undefined);
+      if (response && response.ok && !response.redirected) {
+        const clean = stripRedirect(response.clone());
+        cache.put(request, clean).catch(() => undefined);
       }
-      return response;
+      return request.mode === 'navigate' ? stripRedirect(response) : response;
     } catch {
       // Fall through silently to cache
     }
   }
 
   const cached = await cache.match(request);
-  if (cached) return cached;
+  if (cached) return stripRedirect(cached);
   if (fallbackUrl) {
     const fb = await cache.match(fallbackUrl);
-    if (fb) return fb;
+    if (fb) return stripRedirect(fb);
   }
   return Response.error();
 }
@@ -103,9 +123,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests (SPA): instant cached shell + silent background update when online
+  // Navigation requests (SPA): network-first when online, cached clean shell when offline
   if (request.mode === 'navigate') {
-    event.respondWith(staleWhileRevalidate(event, request, CACHE_SHELL, '/index.html'));
+    event.respondWith(networkFirstWithCache(request, CACHE_SHELL, '/'));
     return;
   }
 
