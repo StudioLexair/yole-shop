@@ -10,6 +10,8 @@ interface SmartImageProps {
   loading?: 'lazy' | 'eager';
   decoding?: 'async' | 'sync' | 'auto';
   fetchPriority?: 'high' | 'low' | 'auto';
+  width?: number;
+  height?: number;
   title?: string;
   variant?: 'card' | 'compact' | 'banner' | 'lightbox';
   showRetryOnError?: boolean;
@@ -25,6 +27,8 @@ export function SmartImage({
   loading = 'lazy',
   decoding = 'async',
   fetchPriority,
+  width,
+  height,
   title,
   variant = 'card',
   showRetryOnError = false,
@@ -105,6 +109,8 @@ export function SmartImage({
         loading={loading}
         decoding={decoding}
         fetchPriority={fetchPriority}
+        width={width}
+        height={height}
         title={title}
         style={style}
         onClick={onClick}

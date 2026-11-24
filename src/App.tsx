@@ -51,16 +51,10 @@ import { trackStoreEvent } from './lib/analytics';
 import { buildWhatsAppUrl, getDisplayPrice, normalizeWhatsAppDigits } from './lib/pricing';
 import { SUPABASE_URL, STORAGE_BUCKET } from './lib/supabase';
 import { ProductCard } from './components/ProductCard';
-import { ProductModal } from './components/ProductModal';
-import { CartDrawer } from './components/CartDrawer';
 import { SplashLoader } from './components/SplashLoader';
 import { FloatingCartButton } from './components/FloatingCartButton';
-import { BottomMenuSheet } from './components/BottomMenuSheet';
 import { SmartImage } from './components/SmartImage';
-import { FilterSheet } from './components/FilterSheet';
 import { ContentGuard } from './components/ContentGuard';
-import { UpdateModal } from './components/UpdateModal';
-import { OrderTrackerModal } from './components/OrderTrackerModal';
 import { FlashDropBanner } from './components/FlashDropBanner';
 import { checkAppUpdate, type EvaluatedUpdateState } from './lib/versionManager';
 import {
@@ -77,9 +71,27 @@ interface BeforeInstallPromptEvent extends Event {
 const AdminView = lazy(() =>
   import('./components/AdminView').then((m) => ({ default: m.AdminView }))
 );
+const ProductModal = lazy(() =>
+  import('./components/ProductModal').then((m) => ({ default: m.ProductModal }))
+);
+const CartDrawer = lazy(() =>
+  import('./components/CartDrawer').then((m) => ({ default: m.CartDrawer }))
+);
+const BottomMenuSheet = lazy(() =>
+  import('./components/BottomMenuSheet').then((m) => ({ default: m.BottomMenuSheet }))
+);
+const FilterSheet = lazy(() =>
+  import('./components/FilterSheet').then((m) => ({ default: m.FilterSheet }))
+);
+const OrderTrackerModal = lazy(() =>
+  import('./components/OrderTrackerModal').then((m) => ({ default: m.OrderTrackerModal }))
+);
+const UpdateModal = lazy(() =>
+  import('./components/UpdateModal').then((m) => ({ default: m.UpdateModal }))
+);
 
 const CART_STORAGE_KEY = 'yole_shop_cart_v1';
-const PAGE_STEP = 36;
+const PAGE_STEP = 24;
 
 function isAdminPath(): boolean {
   if (typeof window === 'undefined') return false;
@@ -137,11 +149,28 @@ export function App() {
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [cartMounted, setCartMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filterMounted, setFilterMounted] = useState(false);
   const [trackerOpen, setTrackerOpen] = useState(false);
+  const [trackerMounted, setTrackerMounted] = useState(false);
   const [trackerCode, setTrackerCode] = useState('');
   const [activeCoupon, setActiveCoupon] = useState<Coupon | null>(null);
+
+  useEffect(() => {
+    if (cartOpen) setCartMounted(true);
+  }, [cartOpen]);
+  useEffect(() => {
+    if (menuOpen) setMenuMounted(true);
+  }, [menuOpen]);
+  useEffect(() => {
+    if (filterOpen) setFilterMounted(true);
+  }, [filterOpen]);
+  useEffect(() => {
+    if (trackerOpen) setTrackerMounted(true);
+  }, [trackerOpen]);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -531,25 +560,32 @@ export function App() {
   );
 
   const searchLexicon = useMemo(
-    () => buildSearchLexicon(products, categories),
-    [products, categories]
+    () => (searchFocused || search.trim() ? buildSearchLexicon(products, categories) : null),
+    [products, categories, searchFocused, search]
   );
 
   const parsedSearch = useMemo(
-    () => (search.trim() ? parseSmartQuery(search, searchLexicon) : null),
+    () => (search.trim() && searchLexicon ? parseSmartQuery(search, searchLexicon) : null),
     [search, searchLexicon]
   );
 
   const searchSuggestions = useMemo(
     () =>
-      buildSearchSuggestions(
-        search,
-        products,
-        categories,
-        settings.usd_to_cup_rate,
-        searchLexicon
-      ),
-    [search, products, categories, settings.usd_to_cup_rate, searchLexicon]
+      searchLexicon && (searchFocused || search.trim())
+        ? buildSearchSuggestions(
+            search,
+            products,
+            categories,
+            settings.usd_to_cup_rate,
+            searchLexicon
+          )
+        : {
+            didYouMean: null,
+            priceIntentLabel: null,
+            quickChips: [],
+            topProducts: [],
+          },
+    [searchFocused, search, products, categories, settings.usd_to_cup_rate, searchLexicon]
   );
 
   const effectiveSearchDept: DepartmentFilter = search.trim() ? 'all' : activeDeptFilter;
@@ -570,7 +606,7 @@ export function App() {
       },
       settings.usd_to_cup_rate,
       categories,
-      searchLexicon
+      searchLexicon ?? undefined
     );
     if (!onlyFavorites) return base;
     return base.filter((p) => favoriteSet.has(p.sku));
@@ -728,11 +764,23 @@ export function App() {
     }
   }, [products]);
 
-  // Banners visuales directos con imágenes reales del catálogo
-  const bannerImg = (sku: string, fallbackDept: Department) =>
-    products.find((p) => p.sku === sku)?.image_url ||
-    products.find((p) => p.department === fallbackDept)?.image_url ||
-    `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/catalog/${sku}.webp`;
+  // Banners ligeros optimizados (520x300 WebP local, con fallback al bucket si cambia el departamento)
+  const bannerImg = (sku: string, fallbackDept: Department) => {
+    if (
+      fallbackDept === 'calzado' ||
+      fallbackDept === 'moda_shein' ||
+      fallbackDept === 'accesorios' ||
+      fallbackDept === 'movilidad' ||
+      fallbackDept === 'solares'
+    ) {
+      return `/banners/${fallbackDept}.webp`;
+    }
+    return (
+      products.find((p) => p.sku === sku)?.image_url ||
+      products.find((p) => p.department === fallbackDept)?.image_url ||
+      `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/catalog/${sku}.webp`
+    );
+  };
 
   if (isAdmin) {
     return (
@@ -752,11 +800,15 @@ export function App() {
             onBackToStore={() => navigateAdmin(false)}
           />
         </Suspense>
-        <UpdateModal
-          open={Boolean(updateState?.updateAvailable && !updateDismissed)}
-          updateState={updateState}
-          onClosePreview={() => setUpdateDismissed(true)}
-        />
+        {Boolean(updateState?.updateAvailable && !updateDismissed) && (
+          <Suspense fallback={null}>
+            <UpdateModal
+              open
+              updateState={updateState}
+              onClosePreview={() => setUpdateDismissed(true)}
+            />
+          </Suspense>
+        )}
       </>
     );
   }
@@ -914,6 +966,9 @@ export function App() {
                 src={bannerImg('YOL-029', 'calzado')}
                 alt="Calzado y Tenis"
                 loading="eager"
+                fetchPriority="high"
+                width={520}
+                height={300}
                 variant="banner"
               />
               <div className="col-banner__overlay">
@@ -934,6 +989,9 @@ export function App() {
                 src={bannerImg('YOL-122', 'moda_shein')}
                 alt="Moda Shein Mujer y Hombre"
                 loading="eager"
+                fetchPriority="high"
+                width={520}
+                height={300}
                 variant="banner"
               />
               <div className="col-banner__overlay">
@@ -954,8 +1012,9 @@ export function App() {
                 src={bannerImg('YOL-165', 'accesorios')}
                 alt="Accesorios"
                 loading="eager"
+                width={520}
+                height={300}
                 variant="banner"
-                style={{ objectPosition: 'center 72%' }}
               />
               <div className="col-banner__overlay">
                 <span className="col-banner__tag">Bolsos, Relojes &amp; Más</span>
@@ -975,6 +1034,8 @@ export function App() {
                 src={bannerImg('VIR-001', 'movilidad')}
                 alt="Motos Eléctricas, Triciclos, Baterías y Todo Virginia"
                 loading="eager"
+                width={520}
+                height={300}
                 variant="banner"
               />
               <div className="col-banner__overlay">
@@ -995,6 +1056,8 @@ export function App() {
                 src={bannerImg('SOL-015', 'solares')}
                 alt="Equipos Solares, EcoFlow, Bluetti, Inversores y Paneles"
                 loading="eager"
+                width={520}
+                height={300}
                 variant="banner"
               />
               <div className="col-banner__overlay">
@@ -1646,128 +1709,150 @@ export function App() {
       )}
 
       {selectedProduct && (
-        <ProductModal
-          key={selectedProduct.id}
-          product={selectedProduct}
-          displayCurrency={displayCurrency}
-          settings={settings}
-          isFavorite={favoriteSet.has(selectedProduct.sku)}
-          onToggleFavorite={toggleFavoriteSku}
-          onClose={closeProductModal}
-          onAddToCart={handleAddToCart}
-          onWhatsAppClick={(prod) =>
-            trackStoreEvent({
-              event_type: 'whatsapp_click',
-              sku: prod.sku,
-              product_title: prod.title,
-            })
-          }
-        />
+        <Suspense fallback={null}>
+          <ProductModal
+            key={selectedProduct.id}
+            product={selectedProduct}
+            displayCurrency={displayCurrency}
+            settings={settings}
+            isFavorite={favoriteSet.has(selectedProduct.sku)}
+            onToggleFavorite={toggleFavoriteSku}
+            onClose={closeProductModal}
+            onAddToCart={handleAddToCart}
+            onWhatsAppClick={(prod) =>
+              trackStoreEvent({
+                event_type: 'whatsapp_click',
+                sku: prod.sku,
+                product_title: prod.title,
+              })
+            }
+          />
+        </Suspense>
       )}
 
-      <CartDrawer
-        open={cartOpen}
-        items={cart}
-        displayCurrency={displayCurrency}
-        settings={settings}
-        activeCoupon={activeCoupon}
-        onApplyCoupon={setActiveCoupon}
-        onOpenTracker={(code) => {
-          setTrackerCode(code);
-          setTrackerOpen(true);
-        }}
-        onClose={() => setCartOpen(false)}
-        onUpdateQty={handleUpdateQty}
-        onRemove={handleRemoveItem}
-        onClear={() => setCart([])}
-      />
+      {cartMounted && (
+        <Suspense fallback={null}>
+          <CartDrawer
+            open={cartOpen}
+            items={cart}
+            displayCurrency={displayCurrency}
+            settings={settings}
+            activeCoupon={activeCoupon}
+            onApplyCoupon={setActiveCoupon}
+            onOpenTracker={(code) => {
+              setTrackerCode(code);
+              setTrackerOpen(true);
+            }}
+            onClose={() => setCartOpen(false)}
+            onUpdateQty={handleUpdateQty}
+            onRemove={handleRemoveItem}
+            onClear={() => setCart([])}
+          />
+        </Suspense>
+      )}
 
-      <OrderTrackerModal
-        open={trackerOpen}
-        initialCode={trackerCode}
-        settings={settings}
-        onClose={() => setTrackerOpen(false)}
-      />
+      {trackerMounted && (
+        <Suspense fallback={null}>
+          <OrderTrackerModal
+            open={trackerOpen}
+            initialCode={trackerCode}
+            settings={settings}
+            onClose={() => setTrackerOpen(false)}
+          />
+        </Suspense>
+      )}
 
       <FloatingCartButton
         totalUnits={totalUnits}
         onOpenCart={() => setCartOpen(true)}
       />
 
-      <FilterSheet
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        totalResults={filteredProducts.length}
-        department={department}
-        calzadoSub={calzadoSub}
-        sheinGender={sheinGender}
-        deptCounts={deptCounts}
-        categories={visibleCategories}
-        categoryId={categoryId}
-        availableSizes={availableSizes}
-        sizeFilter={sizeFilter}
-        priceRange={priceRange}
-        sort={sort}
-        onlyPriced={onlyPriced}
-        onlyFavorites={onlyFavorites}
-        favoriteCount={favoriteSkus.length}
-        onSelectDept={handleSelectDept}
-        onSelectCalzadoSub={handleSelectCalzadoSub}
-        onSelectSheinGender={handleSelectSheinGender}
-        onSelectCategory={(id) => {
-          setCategoryId(id);
-          setVisibleLimit(PAGE_STEP);
-        }}
-        onSelectSize={(sz) => {
-          setSizeFilter(sz);
-          setVisibleLimit(PAGE_STEP);
-        }}
-        onSelectPriceRange={(pr) => {
-          setPriceRange(pr);
-          setVisibleLimit(PAGE_STEP);
-        }}
-        onChangeSort={(s) => setSort(s)}
-        onTogglePriced={() => setOnlyPriced((v) => !v)}
-        onToggleFavorites={() => {
-          setOnlyFavorites((v) => !v);
-          setVisibleLimit(PAGE_STEP);
-        }}
-        onClearAll={clearAllFilters}
-      />
+      {filterMounted && (
+        <Suspense fallback={null}>
+          <FilterSheet
+            open={filterOpen}
+            onClose={() => setFilterOpen(false)}
+            totalResults={filteredProducts.length}
+            department={department}
+            calzadoSub={calzadoSub}
+            sheinGender={sheinGender}
+            deptCounts={deptCounts}
+            categories={visibleCategories}
+            categoryId={categoryId}
+            availableSizes={availableSizes}
+            sizeFilter={sizeFilter}
+            priceRange={priceRange}
+            sort={sort}
+            onlyPriced={onlyPriced}
+            onlyFavorites={onlyFavorites}
+            favoriteCount={favoriteSkus.length}
+            onSelectDept={handleSelectDept}
+            onSelectCalzadoSub={handleSelectCalzadoSub}
+            onSelectSheinGender={handleSelectSheinGender}
+            onSelectCategory={(id) => {
+              setCategoryId(id);
+              setVisibleLimit(PAGE_STEP);
+            }}
+            onSelectSize={(sz) => {
+              setSizeFilter(sz);
+              setVisibleLimit(PAGE_STEP);
+            }}
+            onSelectPriceRange={(pr) => {
+              setPriceRange(pr);
+              setVisibleLimit(PAGE_STEP);
+            }}
+            onChangeSort={(s) => setSort(s)}
+            onTogglePriced={() => setOnlyPriced((v) => !v)}
+            onToggleFavorites={() => {
+              setOnlyFavorites((v) => !v);
+              setVisibleLimit(PAGE_STEP);
+            }}
+            onClearAll={clearAllFilters}
+          />
+        </Suspense>
+      )}
 
-      <BottomMenuSheet
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        settings={settings}
-        department={department}
-        sheinGender={sheinGender}
-        deptCounts={deptCounts}
-        displayCurrency={displayCurrency}
-        themeMode={themeMode}
-        onToggleTheme={() =>
-          setThemeMode((m) => (m === 'dark' ? 'light' : 'dark'))
-        }
-        favoriteCount={favoriteSkus.length}
-        onlyFavorites={onlyFavorites}
-        onToggleFavorites={() => {
-          setOnlyFavorites((v) => !v);
-          setVisibleLimit(PAGE_STEP);
-        }}
-        onSelectDept={handleSelectDept}
-        onSelectSheinGender={handleSelectSheinGender}
-        onChangeCurrency={handleChangeCurrency}
-        onOpenTracker={() => setTrackerOpen(true)}
-        directWaUrl={directWaUrl}
-        canPromptInstall={Boolean(installPrompt)}
-        isInstalled={isInstalled}
-        onInstallApp={handleInstallApp}
-      />
+      {menuMounted && (
+        <Suspense fallback={null}>
+          <BottomMenuSheet
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+            settings={settings}
+            department={department}
+            sheinGender={sheinGender}
+            deptCounts={deptCounts}
+            displayCurrency={displayCurrency}
+            themeMode={themeMode}
+            onToggleTheme={() =>
+              setThemeMode((m) => (m === 'dark' ? 'light' : 'dark'))
+            }
+            favoriteCount={favoriteSkus.length}
+            onlyFavorites={onlyFavorites}
+            onToggleFavorites={() => {
+              setOnlyFavorites((v) => !v);
+              setVisibleLimit(PAGE_STEP);
+            }}
+            onSelectDept={handleSelectDept}
+            onSelectSheinGender={handleSelectSheinGender}
+            onChangeCurrency={handleChangeCurrency}
+            onOpenTracker={() => setTrackerOpen(true)}
+            directWaUrl={directWaUrl}
+            canPromptInstall={Boolean(installPrompt)}
+            isInstalled={isInstalled}
+            onInstallApp={handleInstallApp}
+          />
+        </Suspense>
+      )}
 
-      <UpdateModal
-        open={Boolean(!splashMounted && updateState?.updateAvailable && !updateDismissed)}
-        updateState={updateState}
-        onClosePreview={() => setUpdateDismissed(true)}
-      />
+      {Boolean(!splashMounted && updateState?.updateAvailable && !updateDismissed) && (
+        <Suspense fallback={null}>
+          <UpdateModal
+            open
+            updateState={updateState}
+            onClosePreview={() => setUpdateDismissed(true)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

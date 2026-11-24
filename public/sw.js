@@ -1,6 +1,6 @@
-const CACHE_SHELL = 'yole-shell-v20';
-const CACHE_MEDIA = 'yole-media-v20';
-const CACHE_API = 'yole-api-v20';
+const CACHE_SHELL = 'yole-shell-v21';
+const CACHE_MEDIA = 'yole-media-v21';
+const CACHE_API = 'yole-api-v21';
 
 const SHELL_URLS = [
   '/',
@@ -14,6 +14,12 @@ const SHELL_URLS = [
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',
+  '/fonts/plus-jakarta-sans-latin.woff2',
+  '/banners/calzado.webp',
+  '/banners/moda_shein.webp',
+  '/banners/accesorios.webp',
+  '/banners/movilidad.webp',
+  '/banners/solares.webp',
 ];
 
 function stripRedirect(response) {

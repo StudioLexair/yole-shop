@@ -1,13 +1,13 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "buildId": "local",
-  "releasedAt": "2026-11-16T18:15:00Z",
+  "releasedAt": "2026-11-16T18:55:00Z",
   "mandatory": false,
-  "title": "¡Nuevo catálogo de Equipos Solares!",
-  "description": "Integramos 83 productos solares en 4 subcategorías: Estaciones de Energía, Kits & Inversores, Baterías LiFePO4 y Paneles.",
+  "title": "¡Optimización de velocidad y rendimiento!",
+  "description": "Carga ultrarrápida en móvil y PC con banners ligeros, fuente local, caché de 1 año en fotos solares y carga diferida.",
   "features": [
-    "Nuevo departamento Equipos Solares con 83 equipos y precios en USD",
-    "4 subcategorías: Estaciones de Energía, Kits & Inversores, Baterías LiFePO4 y Paneles",
-    "Pago en Efectivo CUP o USD (sin transferencia) en Equipos Solares"
+    "Banners optimizados (-82% peso inicial) y fuente Plus Jakarta Sans autoalojada",
+    "División de código (code-splitting) y carga diferida de modales y carrito",
+    "Caché de 1 año en todas las imágenes WebP de Equipos Solares"
   ]
 }

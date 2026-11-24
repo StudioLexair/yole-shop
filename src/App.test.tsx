@@ -173,7 +173,7 @@ describe('Yole Shop App', () => {
 
     // Cambio de moneda vive dentro del panel de menú hamburguesa, con USD primero y CUP segundo
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
-    const menuPanel = screen.getByRole('dialog', { name: 'Menú principal' });
+    const menuPanel = await screen.findByRole('dialog', { name: 'Menú principal' });
     const usdBtn = within(menuPanel).getByRole('button', { name: 'USD' });
     const cupBtn = within(menuPanel).getByRole('button', { name: 'CUP' });
     expect(usdBtn.className).toContain('is-active');
@@ -187,20 +187,20 @@ describe('Yole Shop App', () => {
 
     // Volver a USD y verificar persistencia
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Menú principal' })).getByRole('button', { name: 'USD' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Menú principal' })).getByRole('button', { name: 'USD' }));
     expect(localStorage.getItem('yole_shop_currency_v1')).toBe('USD');
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Menú principal' })).getByRole('button', { name: 'Cerrar menú' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Menú principal' })).getByRole('button', { name: 'Cerrar menú' }));
     expect(screen.getByText('$18 USD')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
-    const modal = screen.getByRole('dialog');
+    const modal = await screen.findByRole('dialog');
     fireEvent.click(within(modal).getByRole('button', { name: '38' }));
     fireEvent.click(within(modal).getByRole('button', { name: 'Agregar al carrito' }));
     fireEvent.click(within(modal).getByRole('button', { name: 'Cerrar' }));
 
     // Botón flotante arrastrable abre el carrito directamente
     fireEvent.click(screen.getByRole('button', { name: /Carrito flotante/i }));
-    expect(screen.getByText('Tu Pedido (1)')).toBeInTheDocument();
+    expect(await screen.findByText('Tu Pedido (1)')).toBeInTheDocument();
     expect(screen.getByText(/YOL-003 · Talla 38/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enviar pedido a WhatsApp' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar carrito' }));
@@ -211,7 +211,7 @@ describe('Yole Shop App', () => {
     expect(screen.getByText('Sudadera Hoodie Café Osito Bordado')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
-    const filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    const filterDialog = await screen.findByRole('dialog', { name: 'Filtros y orden' });
     fireEvent.click(within(filterDialog).getByRole('button', { name: /Hombre \(1\)/i }));
     fireEvent.click(within(filterDialog).getByRole('button', { name: /Ver 1 resultados/i }));
     expect(screen.queryByText('Vestido Corto Satén Chocolate')).not.toBeInTheDocument();
@@ -219,7 +219,7 @@ describe('Yole Shop App', () => {
 
     // Menú hamburguesa abre desde abajo y permite navegar a Accesorios
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
-    const sheet = screen.getByRole('dialog', { name: 'Menú principal' });
+    const sheet = await screen.findByRole('dialog', { name: 'Menú principal' });
     expect(within(sheet).getByText('Explorar tienda')).toBeInTheDocument();
     expect(within(sheet).getByText(/Instalar App/i)).toBeInTheDocument();
     fireEvent.click(within(sheet).getByRole('button', { name: /Accesorios/i }));
@@ -258,7 +258,7 @@ describe('Yole Shop App', () => {
       })
     );
     fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
-    let filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    let filterDialog = await screen.findByRole('dialog', { name: 'Filtros y orden' });
     fireEvent.click(within(filterDialog).getByRole('button', { name: /Favoritos \(1\)/i }));
     fireEvent.click(within(filterDialog).getByRole('button', { name: /Ver 1 resultados/i }));
     expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
@@ -266,12 +266,12 @@ describe('Yole Shop App', () => {
 
     // Quitar filtro favoritos y abrir modal con botones Compartir y Descargar foto
     fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
-    filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    filterDialog = await screen.findByRole('dialog', { name: 'Filtros y orden' });
     fireEvent.click(within(filterDialog).getByRole('button', { name: /Favoritos \(1\)/i }));
     fireEvent.click(within(filterDialog).getByRole('button', { name: /Cerrar filtros/i }));
 
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
-    const modal = screen.getByRole('dialog');
+    const modal = await screen.findByRole('dialog');
     expect(within(modal).getByRole('button', { name: '36' })).toBeDisabled();
     expect(within(modal).getByRole('button', { name: /Compartir/i })).toBeInTheDocument();
     expect(within(modal).getByRole('button', { name: /Descargar foto/i })).toBeInTheDocument();
@@ -290,7 +290,7 @@ describe('Yole Shop App', () => {
 
     // Presupuesto $15 - $30 USD dentro de Filtros
     fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
-    const filterDialog = screen.getByRole('dialog', { name: 'Filtros y orden' });
+    const filterDialog = await screen.findByRole('dialog', { name: 'Filtros y orden' });
     fireEvent.click(within(filterDialog).getByRole('button', { name: '$15 – $30 USD' }));
     fireEvent.click(within(filterDialog).getByRole('button', { name: /Ver 1 resultados/i }));
     expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
@@ -320,7 +320,7 @@ describe('Yole Shop App', () => {
 
     // Modo oscuro desde BottomMenuSheet aplica data-theme="dark" en <html>
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
-    const sheet = screen.getByRole('dialog', { name: 'Menú principal' });
+    const sheet = await screen.findByRole('dialog', { name: 'Menú principal' });
     fireEvent.click(
       within(sheet).getByRole('button', { name: 'Cambiar entre modo claro y oscuro' })
     );
@@ -330,11 +330,11 @@ describe('Yole Shop App', () => {
 
     // Abrir modal y abrir visor lightbox pantalla completa
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
-    const modal = screen.getByRole('dialog');
+    const modal = await screen.findByRole('dialog');
     fireEvent.click(
       within(modal).getByRole('button', { name: 'Ampliar foto en pantalla completa' })
     );
-    const lightbox = screen.getByRole('dialog', { name: /Foto ampliada/i });
+    const lightbox = await screen.findByRole('dialog', { name: /Foto ampliada/i });
     expect(lightbox).toBeInTheDocument();
     fireEvent.click(within(lightbox).getByRole('button', { name: 'Cerrar vista ampliada' }));
     expect(screen.queryByRole('dialog', { name: /Foto ampliada/i })).not.toBeInTheDocument();
@@ -375,7 +375,7 @@ describe('Yole Shop App', () => {
     // No existen botones ni accesos públicos a /admin en la tienda ni en el menú
     expect(screen.queryByRole('button', { name: /Administrar/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
-    const sheet = screen.getByRole('dialog', { name: 'Menú principal' });
+    const sheet = await screen.findByRole('dialog', { name: 'Menú principal' });
     expect(within(sheet).queryByRole('button', { name: /Administrar/i })).not.toBeInTheDocument();
   });
 
@@ -400,13 +400,13 @@ describe('Yole Shop App', () => {
 
     // Abrir Seguimiento de pedido desde el Hero
     fireEvent.click(screen.getByRole('button', { name: /Seguir pedido/i }));
-    const trackerDialog = screen.getByRole('dialog', { name: 'Seguimiento de pedido' });
+    const trackerDialog = await screen.findByRole('dialog', { name: 'Seguimiento de pedido' });
     expect(within(trackerDialog).getByPlaceholderText(/YOL-ORD-1042/i)).toBeInTheDocument();
     fireEvent.click(within(trackerDialog).getByRole('button', { name: 'Cerrar seguimiento' }));
 
     // En ficha de producto aparece el formulario "¿No está tu talla o está agotado? Encárganosla"
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
-    const prodDialog = screen.getByRole('dialog');
+    const prodDialog = await screen.findByRole('dialog');
     fireEvent.click(
       within(prodDialog).getByRole('button', { name: /No está tu talla o está agotado/i })
     );
@@ -432,13 +432,13 @@ describe('Yole Shop App', () => {
     expect(screen.queryByText('New Balance 9060 Blanco & Rosa')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Motorina TopMaq TANK 72V 45Ah'));
-    const motoModal = screen.getByRole('dialog');
+    const motoModal = await screen.findByRole('dialog');
     fireEvent.click(within(motoModal).getByRole('button', { name: /Agregar al carrito/i }));
     fireEvent.click(within(motoModal).getByRole('button', { name: 'Cerrar' }));
 
     // Sin Shein en el carrito, transferencia está habilitada
     fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
-    let cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    let cartDialog = await screen.findByRole('dialog', { name: 'Carrito de compra' });
     const transfBtn = within(cartDialog).getByRole('button', { name: /Transf\./i });
     expect(transfBtn).not.toBeDisabled();
     fireEvent.click(transfBtn);
@@ -450,7 +450,7 @@ describe('Yole Shop App', () => {
     fireEvent.click(within(nav).getByRole('button', { name: /Moda Shein/i }));
     expect(screen.getByText('Sudadera Hoodie Café Osito Bordado')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Sudadera Hoodie Café Osito Bordado'));
-    const sheinModal = screen.getByRole('dialog');
+    const sheinModal = await screen.findByRole('dialog');
     expect(
       within(sheinModal).getByText(/artículos Shein no admiten transferencia/i)
     ).toBeInTheDocument();
@@ -458,7 +458,7 @@ describe('Yole Shop App', () => {
     fireEvent.click(within(sheinModal).getByRole('button', { name: 'Cerrar' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
-    cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    cartDialog = await screen.findByRole('dialog', { name: 'Carrito de compra' });
     const blockedTransf = within(cartDialog).getByRole('button', { name: /Transf\./i });
     expect(blockedTransf).toBeDisabled();
     expect(blockedTransf.className).not.toContain('is-active');
@@ -501,7 +501,7 @@ describe('Yole Shop App', () => {
 
     // Al añadir el zueco al carrito, se bloquea Transferencia
     fireEvent.click(screen.getByText('Zuecos Café Claro Doble Hebilla'));
-    const modal = screen.getByRole('dialog');
+    const modal = await screen.findByRole('dialog');
     expect(
       within(modal).getByText(/artículos Shein no admiten transferencia/i)
     ).toBeInTheDocument();
@@ -509,7 +509,7 @@ describe('Yole Shop App', () => {
     fireEvent.click(within(modal).getByRole('button', { name: 'Cerrar' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
-    const cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    const cartDialog = await screen.findByRole('dialog', { name: 'Carrito de compra' });
     expect(within(cartDialog).getByRole('button', { name: /Transf\./i })).toBeDisabled();
     // En modo USD por defecto, el carrito muestra el subtotal en USD primero
     expect(within(cartDialog).getAllByText('$14 USD').length).toBeGreaterThan(0);
@@ -525,7 +525,7 @@ describe('Yole Shop App', () => {
     expect(screen.getByText('17.640 CUP')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
-    const menuPanel = screen.getByRole('dialog', { name: 'Menú principal' });
+    const menuPanel = await screen.findByRole('dialog', { name: 'Menú principal' });
     expect(within(menuPanel).getByRole('button', { name: 'CUP' }).className).toContain('is-active');
     expect(within(menuPanel).getByRole('button', { name: 'USD' }).className).not.toContain('is-active');
   });
@@ -610,7 +610,7 @@ describe('Yole Shop App', () => {
     expect(screen.getByText('$890 USD')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Estación EcoFlow DELTA 2 (1024Wh)'));
-    const modal = screen.getByRole('dialog');
+    const modal = await screen.findByRole('dialog');
     expect(
       within(modal).getByText(/Equipos Solares no admiten transferencia/i)
     ).toBeInTheDocument();
@@ -619,7 +619,7 @@ describe('Yole Shop App', () => {
     fireEvent.click(within(modal).getByRole('button', { name: 'Cerrar' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
-    const cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    const cartDialog = await screen.findByRole('dialog', { name: 'Carrito de compra' });
     expect(within(cartDialog).getByRole('button', { name: /Transf\./i })).toBeDisabled();
     expect(
       within(cartDialog).getByText(/Los Equipos Solares no admiten pago por transferencia/i)

@@ -97,8 +97,9 @@ export function filterProducts(
   categories: Category[] = [],
   lexicon?: SearchLexicon
 ): Product[] {
-  const activeLexicon = lexicon || buildSearchLexicon(products, categories);
-  const parsed = filters.search.trim()
+  const hasSearch = Boolean(filters.search.trim());
+  const activeLexicon = hasSearch ? lexicon || buildSearchLexicon(products, categories) : null;
+  const parsed = hasSearch && activeLexicon
     ? parseSmartQuery(filters.search, activeLexicon)
     : null;
   const scoreMap = new Map<string, number>();
@@ -128,7 +129,7 @@ export function filterProducts(
       if (filters.priceRange === '15to30' && (usd <= 15 || usd > 30)) return false;
       if (filters.priceRange === 'over30' && usd <= 30) return false;
     }
-    if (parsed) {
+    if (parsed && activeLexicon) {
       const catName = activeLexicon.categoryMap.get(p.category_id)?.name || '';
       const res = matchSmartProduct(p, parsed, catName, usdToCupRate, availSizes);
       if (!res.matches) return false;
