@@ -162,6 +162,15 @@ const SYNONYM_GROUPS: Record<string, string[]> = {
   pantalon: ['pantalon', 'pantalones', 'jeans', 'mezclilla', 'leggings'],
   pantalones: ['pantalon', 'pantalones', 'jeans', 'mezclilla', 'leggings'],
   accesorios: ['accesorios', 'cartera', 'bolso', 'reloj', 'gafas', 'gorra'],
+  moto: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica'],
+  motos: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica'],
+  motorina: ['motorina', 'motorinas', 'moto', 'scooter', 'electrica'],
+  bicimoto: ['bicimoto', 'bicimotos', 'bici', 'bicicleta', 'electrica'],
+  triciclo: ['triciclo', 'triciclos', 'carga', 'pasajero', 'moto'],
+  bateria: ['bateria', 'baterias', 'litio', 'lifepo4', 'polifosfato', 'gel', 'catl'],
+  baterias: ['bateria', 'baterias', 'litio', 'lifepo4', 'polifosfato', 'gel', 'catl'],
+  motor: ['motor', 'motores', 'unidad', 'chapa', 'kit'],
+  virginia: ['virginia', 'moto', 'motorina', 'triciclo', 'bicimoto', 'bateria'],
 };
 
 const STOP_WORDS = new Set([
@@ -447,6 +456,13 @@ export function parseSmartQuery(
   if (/\b(accesorios|cartera|bolso|reloj|relojes|mochila)\b/.test(joinedCorrected)) {
     departmentHints.push('accesorios');
   }
+  if (
+    /\b(moto|motos|motorina|motorinas|bicimoto|bicicleta|triciclo|bateria|baterias|lifan|vedca|kvitova|mishozuki|unizuki|torvan|bucatti|topmaq|virginia|motor|motoneta)\b/.test(
+      joinedCorrected
+    )
+  ) {
+    departmentHints.push('movilidad');
+  }
 
   const correctedQuery = correctedTokens.join(' ');
   const didYouMean =
@@ -493,6 +509,18 @@ function tokenMatchesHaystack(token: string, hay: string, dept: Department): boo
       return true;
     }
     if (token === 'accesorios' && dept === 'accesorios') {
+      return true;
+    }
+    if (
+      (token === 'moto' ||
+        token === 'motos' ||
+        token === 'movilidad' ||
+        token === 'virginia' ||
+        token === 'triciclo' ||
+        token === 'motorina' ||
+        token === 'bateria') &&
+      dept === 'movilidad'
+    ) {
       return true;
     }
     if ((token === 'ropa' || token === 'moda') && (dept === 'moda_shein' || dept === 'hombre')) {
@@ -546,7 +574,9 @@ export function matchSmartProduct(
         ? 'moda hombre caballero ropa'
         : product.department === 'moda_shein'
           ? 'moda shein mujer dama ropa'
-          : 'accesorios carteras relojes';
+          : product.department === 'movilidad'
+            ? 'motos motorinas bicimotos triciclos baterias motores todo virginia movilidad'
+            : 'accesorios carteras relojes';
 
   const hay = normalizeText(
     `${product.sku} ${product.title} ${product.brand} ${categoryName} ${deptText} ${product.quality} ${product.fit_note} ${availableSizes.join(' ')}`

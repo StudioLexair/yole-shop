@@ -3,8 +3,10 @@ import {
   buildWhatsAppOrderLink,
   buildWhatsAppProductLink,
   calcYoleSheinPrice,
+  cartHasSheinItems,
   formatWhatsAppOrderText,
   getDisplayPrice,
+  isSheinDepartment,
   normalizeWhatsAppDigits,
   summarizeCart,
 } from './pricing';
@@ -192,5 +194,49 @@ describe('pricing & WhatsApp helpers', () => {
     const decoded = decodeURIComponent(oLink);
     expect(decoded).toContain('YOLE10');
     expect(decoded).toContain('https://yoleshop.ddns.net/?track=YOL-ORD-1042');
+  });
+
+  it('bloquea recargo por transferencia cuando el carrito incluye artículos Shein (moda_shein u hombre)', () => {
+    expect(isSheinDepartment('moda_shein')).toBe(true);
+    expect(isSheinDepartment('hombre')).toBe(true);
+    expect(isSheinDepartment('calzado')).toBe(false);
+    expect(isSheinDepartment('movilidad')).toBe(false);
+
+    const sampleHombre: Product = {
+      ...sampleShein,
+      id: '3',
+      sku: 'YOL-197',
+      department: 'hombre',
+      category_id: 'moda-hombre',
+      price: 40,
+      currency: 'USD',
+    };
+
+    expect(cartHasSheinItems([{ product: sampleShoe, size: '38', qty: 1 }])).toBe(false);
+    expect(
+      cartHasSheinItems([
+        { product: sampleShoe, size: '38', qty: 1 },
+        { product: sampleShein, size: 'M', qty: 1 },
+      ])
+    ).toBe(true);
+    expect(cartHasSheinItems([{ product: sampleHombre, size: 'L', qty: 1 }])).toBe(true);
+
+    // Aunque se pase 'transferencia', summarizeCart anula el recargo si hay Shein
+    const withHombre = summarizeCart(
+      [{ product: sampleHombre, size: 'L', qty: 1 }],
+      DEFAULT_SETTINGS,
+      'recogida',
+      'transferencia'
+    );
+    expect(withHombre.transferFeeCup).toBe(0);
+
+    // Sin Shein, transferencia sí aplica recargo normal
+    const onlyShoe = summarizeCart(
+      [{ product: sampleShoe, size: '38', qty: 1 }],
+      DEFAULT_SETTINGS,
+      'recogida',
+      'transferencia'
+    );
+    expect(onlyShoe.transferFeeCup).toBe(7000);
   });
 });

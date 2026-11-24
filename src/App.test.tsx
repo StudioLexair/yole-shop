@@ -10,6 +10,7 @@ const mockCategories: Category[] = [
   { id: 'vestidos-shein', name: 'Vestidos Shein', department: 'moda_shein', sort_order: 20 },
   { id: 'moda-hombre', name: 'Moda Hombre', department: 'hombre', sort_order: 30 },
   { id: 'bolsos-relojes', name: 'Accesorios', department: 'accesorios', sort_order: 40 },
+  { id: 'motos-electricas', name: 'Motorinas Eléctricas', department: 'movilidad', sort_order: 150 },
 ];
 
 const mockProducts: Product[] = [
@@ -93,6 +94,26 @@ const mockProducts: Product[] = [
     featured: false,
     source_group: 'accesorios',
     sort_order: 40,
+  },
+  {
+    id: 'p5',
+    sku: 'VIR-001',
+    title: 'Motorina TopMaq TANK 72V 45Ah',
+    brand: 'TopMaq',
+    department: 'movilidad',
+    category_id: 'motos-electricas',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 2400,
+    price: 2450,
+    sizes: ['Rojo', 'Negro'],
+    fit_note: 'Batería 72V 45Ah, 1 mes de garantía.',
+    image_url: 'https://example.com/tank.webp',
+    image_path: 'catalog/VIR-001.webp',
+    status: 'active',
+    featured: true,
+    source_group: 'todo_virginia',
+    sort_order: 2700,
   },
 ];
 
@@ -357,5 +378,52 @@ describe('Yole Shop App', () => {
     render(<App />);
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+  });
+
+  it('soporta Motos & Todo Virginia y bloquea transferencia para ropa Shein mujer/hombre', async () => {
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+    });
+
+    // Navegar al departamento Motos & Virginia y agregar VIR-001
+    fireEvent.click(screen.getByRole('button', { name: /Motos & Virginia/i }));
+    expect(screen.getByText('Motorina TopMaq TANK 72V 45Ah')).toBeInTheDocument();
+    expect(screen.queryByText('New Balance 9060 Blanco & Rosa')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Motorina TopMaq TANK 72V 45Ah'));
+    const motoModal = screen.getByRole('dialog');
+    fireEvent.click(within(motoModal).getByRole('button', { name: /Agregar al carrito/i }));
+    fireEvent.click(within(motoModal).getByRole('button', { name: 'Cerrar' }));
+
+    // Sin Shein en el carrito, transferencia está habilitada
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
+    let cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    const transfBtn = within(cartDialog).getByRole('button', { name: /Transf\./i });
+    expect(transfBtn).not.toBeDisabled();
+    fireEvent.click(transfBtn);
+    expect(transfBtn.className).toContain('is-active');
+    fireEvent.click(within(cartDialog).getByRole('button', { name: 'Cerrar carrito' }));
+
+    // Agregar artículo Shein Hombre (YOL-197): se bloquea transferencia automáticamente
+    const nav = screen.getByRole('navigation', { name: 'Departamentos' });
+    fireEvent.click(within(nav).getByRole('button', { name: /Moda Shein/i }));
+    expect(screen.getByText('Sudadera Hoodie Café Osito Bordado')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Sudadera Hoodie Café Osito Bordado'));
+    const sheinModal = screen.getByRole('dialog');
+    expect(
+      within(sheinModal).getByText(/artículos Shein no admiten transferencia/i)
+    ).toBeInTheDocument();
+    fireEvent.click(within(sheinModal).getByRole('button', { name: /Agregar al carrito/i }));
+    fireEvent.click(within(sheinModal).getByRole('button', { name: 'Cerrar' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
+    cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
+    const blockedTransf = within(cartDialog).getByRole('button', { name: /Transf\./i });
+    expect(blockedTransf).toBeDisabled();
+    expect(blockedTransf.className).not.toContain('is-active');
+    expect(
+      within(cartDialog).getByText(/Los productos de Shein no admiten pago por transferencia/i)
+    ).toBeInTheDocument();
   });
 });

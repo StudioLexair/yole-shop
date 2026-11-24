@@ -20,6 +20,7 @@ import type {
 } from '../types';
 import {
   buildWhatsAppOrderLink,
+  cartHasSheinItems,
   formatCup,
   formatUsd,
   getDisplayPrice,
@@ -81,6 +82,16 @@ export function CartDrawer({
   const [sentCode, setSentCode] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
+  const hasSheinItems = cartHasSheinItems(items);
+  const effectivePaymentMethod: PaymentMethod =
+    hasSheinItems && paymentMethod === 'transferencia' ? 'efectivo' : paymentMethod;
+
+  useEffect(() => {
+    if (hasSheinItems && paymentMethod === 'transferencia') {
+      setPaymentMethod('efectivo');
+    }
+  }, [hasSheinItems, paymentMethod]);
+
   useEffect(() => {
     if (activeCoupon?.code) {
       setCouponInput(activeCoupon.code);
@@ -100,15 +111,22 @@ export function CartDrawer({
         customerPhone,
         deliveryType,
         deliveryAddress,
-        paymentMethod,
+        paymentMethod: effectivePaymentMethod,
         deliveryTime,
       });
     }
-  }, [customerName, customerPhone, deliveryType, deliveryAddress, paymentMethod, deliveryTime]);
+  }, [
+    customerName,
+    customerPhone,
+    deliveryType,
+    deliveryAddress,
+    effectivePaymentMethod,
+    deliveryTime,
+  ]);
 
   if (!open) return null;
 
-  const summary = summarizeCart(items, settings, deliveryType, paymentMethod, activeCoupon);
+  const summary = summarizeCart(items, settings, deliveryType, effectivePaymentMethod, activeCoupon);
 
   const handleApplyCoupon = async () => {
     const clean = couponInput.trim().toUpperCase();
@@ -152,7 +170,7 @@ export function CartDrawer({
       customerPhone,
       deliveryType,
       deliveryAddress,
-      paymentMethod,
+      paymentMethod: effectivePaymentMethod,
       deliveryTime,
       notes,
       items,
@@ -176,7 +194,7 @@ export function CartDrawer({
         customer_phone: customerPhone.trim(),
         delivery_type: deliveryType,
         delivery_address: deliveryAddress.trim(),
-        payment_method: paymentMethod,
+        payment_method: effectivePaymentMethod,
         items: items.map((it) => ({
           sku: it.product.sku,
           title: it.product.title,
@@ -466,26 +484,38 @@ export function CartDrawer({
                   <div className="seg-group seg-group--3">
                     <button
                       type="button"
-                      className={paymentMethod === 'efectivo' ? 'is-active' : ''}
+                      className={effectivePaymentMethod === 'efectivo' ? 'is-active' : ''}
                       onClick={() => setPaymentMethod('efectivo')}
                     >
                       Efectivo CUP
                     </button>
                     <button
                       type="button"
-                      className={paymentMethod === 'usd' ? 'is-active' : ''}
+                      className={effectivePaymentMethod === 'usd' ? 'is-active' : ''}
                       onClick={() => setPaymentMethod('usd')}
                     >
                       Efectivo USD
                     </button>
                     <button
                       type="button"
-                      className={paymentMethod === 'transferencia' ? 'is-active' : ''}
-                      onClick={() => setPaymentMethod('transferencia')}
+                      disabled={hasSheinItems}
+                      title={
+                        hasSheinItems
+                          ? 'Los artículos de Shein no admiten pago por transferencia'
+                          : undefined
+                      }
+                      className={effectivePaymentMethod === 'transferencia' ? 'is-active' : ''}
+                      onClick={() => !hasSheinItems && setPaymentMethod('transferencia')}
                     >
                       Transf. (+{settings.transfer_surcharge_pct}%)
                     </button>
                   </div>
+                  {hasSheinItems && (
+                    <p className="shein-cash-only-note" role="note">
+                      Los productos de Shein no admiten pago por transferencia. Disponible solo
+                      Efectivo CUP o USD.
+                    </p>
+                  )}
                 </div>
 
                 <label className="field">

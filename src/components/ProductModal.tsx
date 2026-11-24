@@ -14,7 +14,11 @@ import {
   X,
 } from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
-import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
+import {
+  buildWhatsAppProductLink,
+  getDisplayPrice,
+  isSheinDepartment,
+} from '../lib/pricing';
 import { getAvailableSizes, submitSizeRequest } from '../lib/catalog';
 import { downloadRemoteImage, shareProductLink } from '../lib/mediaHelpers';
 import { SmartImage } from './SmartImage';
@@ -271,9 +275,15 @@ export function ProductModal({
                 {priceInfo.secondary && <span className="modal-subprice">{priceInfo.secondary}</span>}
               </div>
 
+              {isSheinDepartment(product.department) && (
+                <div className="shein-cash-only-note" role="note">
+                  Solo pago en Efectivo CUP o USD (artículos Shein no admiten transferencia).
+                </div>
+              )}
+
               {product.fit_note && (
                 <div className="modal-note">
-                  <strong>Nota:</strong> {product.fit_note}
+                  <strong>Especificaciones / Nota:</strong> {product.fit_note}
                 </div>
               )}
 
@@ -281,8 +291,10 @@ export function ProductModal({
                 <div className="modal-sizes__label">
                   <span>
                     {noSizesAvailable
-                      ? 'Todas las tallas agotadas temporalmente'
-                      : 'Selecciona talla disponible:'}
+                      ? 'Agotado temporalmente'
+                      : product.department === 'movilidad'
+                        ? 'Disponibilidad / Opción:'
+                        : 'Selecciona talla disponible:'}
                   </span>
                   <strong>{noSizesAvailable ? 'Agotado' : selectedSize}</strong>
                 </div>

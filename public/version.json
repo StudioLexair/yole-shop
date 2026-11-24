@@ -1,13 +1,13 @@
 {
-  "version": "1.3.2",
+  "version": "1.3.3",
   "buildId": "local",
-  "releasedAt": "2026-11-24T17:15:00Z",
+  "releasedAt": "2026-11-24T19:00:00Z",
   "mandatory": false,
   "title": "¡Actualización disponible!",
-  "description": "Nuevo Sincronizador Masivo de Fotos en el panel y ficha de producto refinada.",
+  "description": "Nuevo departamento Motos & Todo Virginia y mejoras de pago.",
   "features": [
-    "Sincronizador masivo de fotos ($0 gratis) con detección de tallas tachadas",
-    "Botones compactos en una línea dentro de la ficha",
-    "Previews reales con foto y precio en WhatsApp"
+    "Nuevo departamento Motos & Todo Virginia (motorinas, bicimotos, triciclos, motos y baterías)",
+    "Regla automática en carrito: artículos Shein solo admiten Efectivo CUP o USD",
+    "Catálogo completo con precios finales en USD y galería multi-ángulo"
   ]
 }

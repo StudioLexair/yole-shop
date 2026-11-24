@@ -3,12 +3,21 @@ import type {
   Coupon,
   Currency,
   DeliveryType,
+  Department,
   PaymentMethod,
   Product,
   StoreSettings,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { STORAGE_BUCKET, SUPABASE_URL } from './supabase';
+
+export function isSheinDepartment(dept: Department | undefined): boolean {
+  return dept === 'moda_shein' || dept === 'hombre';
+}
+
+export function cartHasSheinItems(items: CartItem[]): boolean {
+  return items.some((it) => isSheinDepartment(it.product.department));
+}
 
 export function resolveProductImageUrl(sku: string, imageUrl?: string): string {
   if (imageUrl && imageUrl.trim()) return imageUrl.trim();
@@ -196,10 +205,13 @@ export function summarizeCart(
   const discountedSubtotalCup = Math.max(0, subtotalCup - disc.discountCup);
   const discountedSubtotalUsd = Math.round((discountedSubtotalCup / rate) * 100) / 100;
 
+  const effectivePayment: PaymentMethod =
+    cartHasSheinItems(items) && paymentMethod === 'transferencia' ? 'efectivo' : paymentMethod;
+
   const deliveryFeeCup =
     deliveryType === 'domicilio' && items.length > 0 ? Math.round(settings.delivery_fee_cup) : 0;
   const transferFeeCup =
-    paymentMethod === 'transferencia' && discountedSubtotalCup > 0
+    effectivePayment === 'transferencia' && discountedSubtotalCup > 0
       ? Math.round((discountedSubtotalCup * settings.transfer_surcharge_pct) / 100)
       : 0;
 

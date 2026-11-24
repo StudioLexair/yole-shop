@@ -29,6 +29,7 @@ interface BottomMenuSheetProps {
     moda_shein: number;
     hombre: number;
     accesorios: number;
+    movilidad: number;
   };
   displayCurrency: Currency;
   themeMode?: ThemeMode;
@@ -205,6 +206,18 @@ export function BottomMenuSheet({
                 <span>Accesorios</span>
                 <span className="sheet-nav-right">
                   <strong>{deptCounts.accesorios}</strong>
+                  <ChevronRight size={16} />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`sheet-nav-item${department === 'movilidad' ? ' is-active' : ''}`}
+                onClick={() => pickDept('movilidad')}
+              >
+                <span>Motos &amp; Todo Virginia</span>
+                <span className="sheet-nav-right">
+                  <strong>{deptCounts.movilidad}</strong>
                   <ChevronRight size={16} />
                 </span>
               </button>

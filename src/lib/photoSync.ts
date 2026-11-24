@@ -408,7 +408,7 @@ INSTRUCCIONES CRÍTICAS:
 Analiza esta FOTO NUEVA de producto del grupo de WhatsApp:
 1. Extrae precio ("30mil" = 30000 CUP, "35mil" = 35000 CUP, "$85" = 85 USD).
 2. Extrae tallas AÚN DISPONIBLES (números o letras no tachados) y tallas TACHADAS con X o raya.
-3. Identifica marca, modelo descriptivo en español con color, calidad ("3A", "G5" o "Importado") y departamento ("calzado", "moda_shein", "hombre" o "accesorios").
+3. Identifica marca, modelo descriptivo en español con color, calidad ("3A", "G5" o "Importado") y departamento ("calzado", "moda_shein", "hombre", "accesorios" o "movilidad").
 4. Devuelve ÚNICAMENTE JSON válido:
 {
   "same_product": false,
@@ -613,7 +613,8 @@ export function classifyAnalysisOutcome(params: {
   const dept: Department =
     extracted?.department === 'moda_shein' ||
     extracted?.department === 'hombre' ||
-    extracted?.department === 'accesorios'
+    extracted?.department === 'accesorios' ||
+    extracted?.department === 'movilidad'
       ? extracted.department
       : 'calzado';
 

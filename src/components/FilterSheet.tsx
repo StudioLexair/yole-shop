@@ -14,6 +14,7 @@ interface FilterSheetProps {
     moda_shein: number;
     hombre: number;
     accesorios: number;
+    movilidad: number;
   };
   categories: Category[];
   categoryId: string;
@@ -189,6 +190,13 @@ export function FilterSheet({
                 onClick={() => onSelectDept('accesorios')}
               >
                 Accesorios ({deptCounts.accesorios})
+              </button>
+              <button
+                type="button"
+                className={`chip${department === 'movilidad' ? ' is-active' : ''}`}
+                onClick={() => onSelectDept('movilidad')}
+              >
+                Motos &amp; Todo Virginia ({deptCounts.movilidad})
               </button>
             </div>
 

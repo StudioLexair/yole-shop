@@ -361,7 +361,7 @@ export function App() {
   };
 
   const deptCounts = useMemo(() => {
-    const counts = { all: 0, calzado: 0, moda_shein: 0, hombre: 0, accesorios: 0 };
+    const counts = { all: 0, calzado: 0, moda_shein: 0, hombre: 0, accesorios: 0, movilidad: 0 };
     for (const p of products) {
       if (p.status === 'hidden') continue;
       if (!settings.show_sold_out_public && p.status === 'sold_out') continue;
@@ -715,7 +715,7 @@ export function App() {
             </span>
             <div>
               <strong>{settings.store_name.toUpperCase()}</strong>
-              <small>Calzado &amp; Moda</small>
+              <small>Calzado, Moda &amp; Motos</small>
             </div>
           </a>
 
@@ -749,6 +749,14 @@ export function App() {
             >
               {DEPARTMENT_LABELS.accesorios}{' '}
               <span className="nav-count">{deptCounts.accesorios}</span>
+            </button>
+            <button
+              type="button"
+              className={department === 'movilidad' ? 'is-active' : ''}
+              onClick={() => handleSelectDept('movilidad')}
+            >
+              Motos &amp; Virginia{' '}
+              <span className="nav-count">{deptCounts.movilidad}</span>
             </button>
           </nav>
 
@@ -874,6 +882,26 @@ export function App() {
                 <strong>Accesorios ({deptCounts.accesorios})</strong>
                 <span className="col-banner__cta">
                   Ver colección <ArrowRight size={14} />
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className={`col-banner${department === 'movilidad' ? ' is-selected' : ''}`}
+              onClick={() => handleSelectDept('movilidad')}
+            >
+              <SmartImage
+                src={bannerImg('VIR-001', 'movilidad')}
+                alt="Motos Eléctricas, Triciclos, Baterías y Todo Virginia"
+                loading="eager"
+                variant="banner"
+              />
+              <div className="col-banner__overlay">
+                <span className="col-banner__tag">D Todo Virginia</span>
+                <strong>Motos &amp; Movilidad ({deptCounts.movilidad})</strong>
+                <span className="col-banner__cta">
+                  Ver catálogo <ArrowRight size={14} />
                 </span>
               </div>
             </button>
