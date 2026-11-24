@@ -6,9 +6,10 @@ const SUPABASE_URL = 'https://lroyrrgcjjtijwutykzm.supabase.co';
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxyb3lycmdjamp0aWp3dXR5a3ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0NDgxNzAsImV4cCI6MjExMTAyNDE3MH0.tX3sQLLbY0myA3-9UUxfCtgReCn3k32e870fTT7Q0uE';
 
-export const onRequestGet = async (context: { request: Request; env: PagesEnv }) => {
+export const onRequest = async (context: { request: Request; env: PagesEnv }) => {
   const reqUrl = new URL(context.request.url);
   const sku = (reqUrl.searchParams.get('sku') || '').trim().toUpperCase();
+  const isHead = context.request.method === 'HEAD';
 
   let imageUrl = '';
   if (sku) {
@@ -42,17 +43,20 @@ export const onRequestGet = async (context: { request: Request; env: PagesEnv })
 
   for (const upstream of candidates) {
     try {
-      const r = await fetch(upstream);
+      const r = await fetch(upstream, { method: 'GET' });
       const ct = (r.headers.get('content-type') || '').toLowerCase();
       if (r.ok && ct.includes('image/jpeg')) {
-        return new Response(r.body, {
+        const headers = new Headers({
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'public, max-age=86400',
+          'Cross-Origin-Resource-Policy': 'cross-origin',
+          'Access-Control-Allow-Origin': '*',
+        });
+        const len = r.headers.get('content-length');
+        if (len) headers.set('Content-Length', len);
+        return new Response(isHead ? null : r.body, {
           status: 200,
-          headers: {
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': 'public, max-age=86400',
-            'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Access-Control-Allow-Origin': '*',
-          },
+          headers,
         });
       }
     } catch {
