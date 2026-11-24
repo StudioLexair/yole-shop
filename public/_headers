@@ -22,6 +22,14 @@
   ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' blob: https://lroyrrgcjjtijwutykzm.supabase.co wss://lroyrrgcjjtijwutykzm.supabase.co https://generativelanguage.googleapis.com https://api.groq.com; manifest-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests
 
+/gestor
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+
+/gestor/*
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+
 /
   Cache-Control: no-cache, must-revalidate
 
