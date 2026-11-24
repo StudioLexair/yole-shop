@@ -41,6 +41,46 @@ export interface AlertSubscriber {
   created_at: string;
 }
 
+export type GestorStatus = 'pending' | 'active' | 'suspended' | 'rejected';
+
+export interface GestorProfile {
+  id: string;
+  user_id: string;
+  slug: string;
+  full_name: string;
+  phone: string;
+  ci_number: string;
+  address: string;
+  municipality: string;
+  store_label: string;
+  contact_whatsapp: string;
+  hide_yole_sku: boolean;
+  default_markups: Partial<Record<Department, number>>;
+  status: GestorStatus;
+  admin_note: string;
+  created_at: string;
+  approved_at?: string | null;
+}
+
+export interface PublicGestorCatalog {
+  id: string;
+  slug: string;
+  store_label: string;
+  contact_whatsapp: string;
+  hide_yole_sku: boolean;
+  default_markups: Partial<Record<Department, number>>;
+  prices: Record<string, number>;
+}
+
+export interface GestorOrderSummary {
+  order_code: string;
+  status: OrderStatus;
+  subtotal_usd: number;
+  subtotal_cup: number;
+  items_count: number;
+  created_at: string;
+}
+
 export interface StoreSettings {
   id: string;
   store_name: string;

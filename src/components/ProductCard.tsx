@@ -198,7 +198,7 @@ export function ProductCard({
       <div className="p-card__body">
         <div className="p-card__meta-line">
           <span className="p-card__brand">{product.brand}</span>
-          {!(reseller?.enabled && reseller.hideYoleSku) && (
+          {!(reseller?.hideYoleSku && (reseller.enabled || reseller.gestorName)) && (
             <span className="p-card__sku">{product.sku}</span>
           )}
         </div>

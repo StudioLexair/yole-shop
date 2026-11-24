@@ -1,13 +1,13 @@
 {
-  "version": "1.6.1",
+  "version": "1.7.0",
   "buildId": "local",
-  "releasedAt": "2026-11-16T22:45:00Z",
+  "releasedAt": "2026-11-16T23:30:00Z",
   "mandatory": false,
-  "title": "Suite Yole Pro · Asistente IA, Calc. Solar, Comparador y PDF",
-  "description": "Nuevo Asistente Yole Pro unificado con comparador móvil, calculadora solar de electrodomésticos, constructor de kits, cotizaciones PDF, envíos por provincia, modo gestor, estados 9:16 y multi-moneda en vivo.",
+  "title": "Portal Gestores PRO Verificados · Yole Shop",
+  "description": "Nuevo Portal Gestores PRO (/gestor) sin confirmación de correo, validación manual de identidad por administración, editor de precios exclusivos por encima del base y catálogos personalizados (?g=ALIAS).",
   "features": [
-    "Asistente Yole Pro (Chat IA, Calculadora Solar, Comparador móvil-first y Arma tu Kit)",
-    "Cotizaciones formales en PDF real + Estados WhatsApp 9:16 + Modo Gestor/Revendedor (?ref=)",
-    "Filtros rápidos por departamento, ficha técnica automática, envíos por zona y sinónimos en 1 clic"
+    "Botón Modo Gestor PRO con acceso a página dedicada de registro sin Gmail",
+    "Verificación manual desde Admin (Carnet de Identidad, teléfono y dirección) antes de activar",
+    "Editor protegido: los gestores activos solo editan sus precios por encima y comparten ?g=ALIAS"
   ]
 }

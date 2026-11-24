@@ -314,7 +314,9 @@ export function ProductModal({
 
             <div className="modal-info">
               <div className="modal-meta-row">
-                <span className="p-badge p-badge--sku">{product.sku}</span>
+                {!(reseller?.hideYoleSku && (reseller.enabled || reseller.gestorName)) && (
+                  <span className="p-badge p-badge--sku">{product.sku}</span>
+                )}
                 {product.quality && (
                   <span className={`p-badge p-badge--qual${product.quality === 'G5' ? ' is-gold' : ''}`}>
                     Calidad {product.quality}
@@ -669,7 +671,9 @@ export function ProductModal({
             <div className="lightbox-caption">
               <strong>{product.title}</strong>
               <span>
-                {!(reseller?.enabled && reseller.hideYoleSku) ? `${product.sku} · ` : ''}
+                {!(reseller?.hideYoleSku && (reseller.enabled || reseller.gestorName))
+                  ? `${product.sku} · `
+                  : ''}
                 {priceInfo.formatted}
               </span>
             </div>

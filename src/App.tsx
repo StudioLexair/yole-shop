@@ -23,6 +23,7 @@ import type {
   Department,
   PricePreset,
   Product,
+  PublicGestorCatalog,
   ResellerConfig,
   StoreSettings,
 } from './types';
@@ -62,9 +63,14 @@ import { QuickDeptFilters } from './components/QuickDeptFilters';
 import type { AssistantTabKey } from './components/AssistantModal';
 import {
   captureReferralFromUrl,
-  readResellerConfig,
-  saveResellerConfig,
+  DEFAULT_RESELLER_CONFIG,
 } from './lib/commerceTools';
+import {
+  applyGestorCatalogOverlay,
+  captureGestorSlugFromUrl,
+  clearStoredGestorSlug,
+  fetchPublicGestorCatalog,
+} from './lib/gestorService';
 import { checkAppUpdate, type EvaluatedUpdateState } from './lib/versionManager';
 import {
   buildSearchLexicon,
@@ -105,6 +111,9 @@ const UpdateModal = lazy(() =>
 const AssistantModal = lazy(() =>
   import('./components/AssistantModal').then((m) => ({ default: m.AssistantModal }))
 );
+const GestorPortal = lazy(() =>
+  import('./components/GestorPortal').then((m) => ({ default: m.GestorPortal }))
+);
 
 const CART_STORAGE_KEY = 'yole_shop_cart_v1';
 const PAGE_STEP = 24;
@@ -117,6 +126,14 @@ function isAdminPath(): boolean {
   );
 }
 
+function isGestorPath(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.pathname.replace(/\/+$/, '') === '/gestor' ||
+    window.location.hash === '#gestor'
+  );
+}
+
 export function App() {
   const initialCache = useMemo(() => readCachedStoreData(), []);
 
@@ -126,7 +143,7 @@ export function App() {
   const [categories, setCategories] = useState<Category[]>(
     () => initialCache?.categories || []
   );
-  const [products, setProducts] = useState<Product[]>(
+  const [rawProducts, setRawProducts] = useState<Product[]>(
     () => initialCache?.products || []
   );
   const [pricePresets, setPricePresets] = useState<PricePreset[]>(
@@ -134,14 +151,19 @@ export function App() {
   );
   const [loading, setLoading] = useState(() => !initialCache);
   const [minSplashDone, setMinSplashDone] = useState(
-    () => isAdminPath() || import.meta.env.MODE === 'test'
+    () => isAdminPath() || isGestorPath() || import.meta.env.MODE === 'test'
   );
   const [splashMounted, setSplashMounted] = useState(
-    () => !isAdminPath() && import.meta.env.MODE !== 'test'
+    () => !isAdminPath() && !isGestorPath() && import.meta.env.MODE !== 'test'
   );
   const [loadError, setLoadError] = useState('');
 
   const [isAdmin, setIsAdmin] = useState<boolean>(isAdminPath);
+  const [isGestorRoute, setIsGestorRoute] = useState<boolean>(isGestorPath);
+  const [activeGestorSlug, setActiveGestorSlug] = useState<string>(() =>
+    captureGestorSlugFromUrl()
+  );
+  const [publicGestor, setPublicGestor] = useState<PublicGestorCatalog | null>(null);
   const [department, setDepartment] = useState<Department | 'all'>('all');
   const [calzadoSub, setCalzadoSub] = useState<CalzadoSubFilter>('tenis');
   const [sheinGender, setSheinGender] = useState<SheinSubFilter>('all');
@@ -175,12 +197,55 @@ export function App() {
   const [trackerMounted, setTrackerMounted] = useState(false);
   const [trackerCode, setTrackerCode] = useState('');
   const [activeCoupon, setActiveCoupon] = useState<Coupon | null>(null);
-  const [reseller, setReseller] = useState<ResellerConfig>(() => readResellerConfig());
   const [referralCode, setReferralCode] = useState<string>(() => captureReferralFromUrl());
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMounted, setAssistantMounted] = useState(false);
   const [assistantTab, setAssistantTab] = useState<AssistantTabKey>('chat');
+
+  const products = useMemo(
+    () => applyGestorCatalogOverlay(rawProducts, publicGestor, settings.usd_to_cup_rate),
+    [rawProducts, publicGestor, settings.usd_to_cup_rate]
+  );
+
+  const effectiveSettings = useMemo<StoreSettings>(() => {
+    if (!publicGestor) return settings;
+    return {
+      ...settings,
+      store_name: publicGestor.store_label || settings.store_name,
+      whatsapp_number: publicGestor.contact_whatsapp || settings.whatsapp_number,
+    };
+  }, [settings, publicGestor]);
+
+  const effectiveReseller = useMemo<ResellerConfig>(
+    () => ({
+      ...DEFAULT_RESELLER_CONFIG,
+      enabled: false,
+      gestorName: publicGestor?.slug || '',
+      hideYoleSku: publicGestor ? publicGestor.hide_yole_sku : false,
+    }),
+    [publicGestor]
+  );
+
+  useEffect(() => {
+    if (!activeGestorSlug) {
+      setPublicGestor(null);
+      return;
+    }
+    let alive = true;
+    void fetchPublicGestorCatalog(activeGestorSlug).then((cat) => {
+      if (!alive) return;
+      if (cat) {
+        setPublicGestor(cat);
+        setReferralCode(cat.slug);
+      } else {
+        setPublicGestor(null);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [activeGestorSlug]);
 
   const openAssistant = useCallback((tab: AssistantTabKey = 'chat') => {
     setAssistantTab(tab);
@@ -194,11 +259,6 @@ export function App() {
       if (prev.length >= 3) return [...prev.slice(1), productId];
       return [...prev, productId];
     });
-  }, []);
-
-  const handleUpdateReseller = useCallback((nextCfg: ResellerConfig) => {
-    setReseller(nextCfg);
-    saveResellerConfig(nextCfg);
   }, []);
 
   useEffect(() => {
@@ -315,7 +375,10 @@ export function App() {
   }, [cart]);
 
   useEffect(() => {
-    const onPop = () => setIsAdmin(isAdminPath());
+    const onPop = () => {
+      setIsAdmin(isAdminPath());
+      setIsGestorRoute(isGestorPath());
+    };
     window.addEventListener('popstate', onPop);
     window.addEventListener('hashchange', onPop);
     return () => {
@@ -364,7 +427,7 @@ export function App() {
 
   const refreshData = useCallback(async () => {
     const hasLocalCatalog =
-      products.length > 0 || Boolean(readCachedStoreData()?.products?.length);
+      rawProducts.length > 0 || Boolean(readCachedStoreData()?.products?.length);
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       setLoading(false);
@@ -379,7 +442,7 @@ export function App() {
       const data = await fetchStoreData();
       setSettings(data.settings);
       setCategories(data.categories);
-      setProducts(data.products);
+      setRawProducts(data.products);
       setPricePresets(data.pricePresets || []);
       setLoadError('');
       if (import.meta.env.MODE !== 'test') {
@@ -395,7 +458,7 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, [products.length]);
+  }, [rawProducts.length]);
 
   useEffect(() => {
     refreshData();
@@ -435,14 +498,14 @@ export function App() {
   };
 
   useEffect(() => {
-    if (import.meta.env.MODE === 'test' || isAdmin) {
+    if (import.meta.env.MODE === 'test' || isAdmin || isGestorRoute) {
       setMinSplashDone(true);
       setSplashMounted(false);
       return;
     }
     const t = setTimeout(() => setMinSplashDone(true), 4400);
     return () => clearTimeout(t);
-  }, [isAdmin]);
+  }, [isAdmin, isGestorRoute]);
 
   useEffect(() => {
     if (!loading && minSplashDone) {
@@ -451,13 +514,50 @@ export function App() {
     }
   }, [loading, minSplashDone]);
 
+  // Keep cart item prices aligned with active Gestor catalog prices
+  useEffect(() => {
+    if (products.length === 0) return;
+    const byId = new Map(products.map((p) => [p.id, p]));
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((it) => {
+        const fresh = byId.get(it.product.id);
+        if (fresh && fresh.price !== it.product.price) {
+          changed = true;
+          return { ...it, product: fresh };
+        }
+        return it;
+      });
+      return changed ? next : prev;
+    });
+  }, [products]);
+
   const navigateAdmin = (enter: boolean) => {
     if (enter) {
       window.history.pushState({}, '', '/admin');
       setIsAdmin(true);
+      setIsGestorRoute(false);
     } else {
       window.history.pushState({}, '', '/');
       setIsAdmin(false);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateGestor = (enter: boolean, previewSlug?: string) => {
+    if (enter) {
+      window.history.pushState({}, '', '/gestor');
+      setIsGestorRoute(true);
+      setIsAdmin(false);
+    } else if (previewSlug) {
+      window.history.pushState({}, '', `/?g=${encodeURIComponent(previewSlug)}`);
+      setIsGestorRoute(false);
+      setActiveGestorSlug(previewSlug);
+      setReferralCode(previewSlug);
+    } else {
+      const qs = activeGestorSlug ? `/?g=${encodeURIComponent(activeGestorSlug)}` : '/';
+      window.history.pushState({}, '', qs);
+      setIsGestorRoute(false);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -840,8 +940,8 @@ export function App() {
 
   const totalUnits = cart.reduce((acc, it) => acc + it.qty, 0);
   const directWaUrl = buildWhatsAppUrl(
-    normalizeWhatsAppDigits(settings.whatsapp_number),
-    `Hola ${settings.store_name}, quiero consultar sobre los productos del catálogo.`
+    normalizeWhatsAppDigits(effectiveSettings.whatsapp_number),
+    `Hola ${effectiveSettings.store_name}, quiero consultar sobre los productos del catálogo.`
   );
 
   // Registrar búsquedas sin resultados con debounce para analítica real en /admin
@@ -902,7 +1002,7 @@ export function App() {
           <AdminView
             settings={settings}
             categories={categories}
-            products={products}
+            products={rawProducts}
             pricePresets={pricePresets}
             themeMode={themeMode}
             onToggleTheme={() =>
@@ -921,6 +1021,21 @@ export function App() {
             />
           </Suspense>
         )}
+      </>
+    );
+  }
+
+  if (isGestorRoute) {
+    return (
+      <>
+        <ContentGuard />
+        <Suspense fallback={<SplashLoader visible label="Cargando Portal de Gestores PRO..." />}>
+          <GestorPortal
+            products={rawProducts}
+            settings={settings}
+            onBackToStore={(previewSlug) => navigateGestor(false, previewSlug)}
+          />
+        </Suspense>
       </>
     );
   }
@@ -950,8 +1065,12 @@ export function App() {
               <img src="/brand-mark.webp" alt="Logo Yole Shop" width={36} height={36} />
             </span>
             <div>
-              <strong>{settings.store_name.toUpperCase()}</strong>
-              <small>Calzado, Moda &amp; Motos</small>
+              <strong>{effectiveSettings.store_name.toUpperCase()}</strong>
+              <small>
+                {publicGestor
+                  ? `Catálogo oficial · ${publicGestor.store_label || publicGestor.slug}`
+                  : 'Calzado, Moda & Motos'}
+              </small>
             </div>
           </a>
 
@@ -1034,8 +1153,8 @@ export function App() {
         <div className="container">
           <div className="hero-headline-row">
             <div>
-              <h1>{settings.store_name}</h1>
-              <p>{settings.hero_title}</p>
+              <h1>{effectiveSettings.store_name}</h1>
+              <p>{effectiveSettings.hero_title}</p>
             </div>
             <div className="hero-headline-actions">
               <button
@@ -1206,18 +1325,22 @@ export function App() {
           </div>
         )}
 
-        {reseller.enabled && (
+        {publicGestor && (
           <div className="vip-active-banner" role="status">
             <span>
-              Modo Gestor activo ({reseller.gestorName || 'Revendedor'} · +
-              {reseller.mode === 'pct' ? `${reseller.value}%` : `$${reseller.value} USD`})
+              Catálogo personalizado de <strong>{publicGestor.store_label || publicGestor.slug}</strong>
             </span>
             <button
               type="button"
               className="btn-link"
-              onClick={() => handleUpdateReseller({ ...reseller, enabled: false })}
+              onClick={() => {
+                clearStoredGestorSlug();
+                setActiveGestorSlug('');
+                setPublicGestor(null);
+                window.history.replaceState({}, '', '/');
+              }}
             >
-              Desactivar
+              Ver tienda oficial
             </button>
           </div>
         )}
@@ -1434,7 +1557,8 @@ export function App() {
                               )}
                             </strong>
                             <small>
-                              {hit.brand} · {hit.sku}
+                              {hit.brand}
+                              {!effectiveReseller.hideYoleSku ? ` · ${hit.sku}` : ''}
                               {hit.featured ? ' · ★ TOP' : ''}
                             </small>
                           </div>
@@ -1863,8 +1987,8 @@ export function App() {
               {search.trim() && (
                 <a
                   href={buildWhatsAppUrl(
-                    normalizeWhatsAppDigits(settings.whatsapp_number),
-                    `Hola ${settings.store_name}, estoy buscando «${search.trim()}» en la tienda. ¿Me ayudan a encontrarlo?`
+                    normalizeWhatsAppDigits(effectiveSettings.whatsapp_number),
+                    `Hola ${effectiveSettings.store_name}, estoy buscando «${search.trim()}» en la tienda. ¿Me ayudan a encontrarlo?`
                   )}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1919,8 +2043,8 @@ export function App() {
                   key={product.id}
                   product={product}
                   displayCurrency={displayCurrency}
-                  settings={settings}
-                  reseller={reseller}
+                  settings={effectiveSettings}
+                  reseller={effectiveReseller}
                   isFavorite={favoriteSet.has(product.sku)}
                   isCompared={compareIds.includes(product.id)}
                   onToggleFavorite={toggleFavoriteSku}
@@ -1955,9 +2079,9 @@ export function App() {
       <footer className="site-footer">
         <div className="container footer-inner">
           <div>
-            <strong>{settings.store_name.toUpperCase()}</strong>
-            <p>{settings.tagline}</p>
-            <p className="footer-policy">{settings.no_returns_notice}</p>
+            <strong>{effectiveSettings.store_name.toUpperCase()}</strong>
+            <p>{effectiveSettings.tagline}</p>
+            <p className="footer-policy">{effectiveSettings.no_returns_notice}</p>
             <div className="footer-studio-credit">
               <span>Tienda online hecha por</span>
               <a
@@ -2038,8 +2162,8 @@ export function App() {
             allProducts={products}
             recentProducts={recentProducts}
             displayCurrency={displayCurrency}
-            settings={settings}
-            reseller={reseller}
+            settings={effectiveSettings}
+            reseller={effectiveReseller}
             isFavorite={favoriteSet.has(selectedProduct.sku)}
             onToggleFavorite={toggleFavoriteSku}
             onClose={closeProductModal}
@@ -2068,8 +2192,8 @@ export function App() {
             items={cart}
             allProducts={products}
             displayCurrency={displayCurrency}
-            settings={settings}
-            reseller={reseller}
+            settings={effectiveSettings}
+            reseller={effectiveReseller}
             referralCode={referralCode}
             activeCoupon={activeCoupon}
             onApplyCoupon={setActiveCoupon}
@@ -2091,7 +2215,7 @@ export function App() {
           <OrderTrackerModal
             open={trackerOpen}
             initialCode={trackerCode}
-            settings={settings}
+            settings={effectiveSettings}
             onClose={() => setTrackerOpen(false)}
           />
         </Suspense>
@@ -2152,7 +2276,7 @@ export function App() {
           <BottomMenuSheet
             open={menuOpen}
             onClose={() => setMenuOpen(false)}
-            settings={settings}
+            settings={effectiveSettings}
             department={department}
             sheinGender={sheinGender}
             deptCounts={deptCounts}
@@ -2172,8 +2296,7 @@ export function App() {
             onChangeCurrency={handleChangeCurrency}
             onOpenTracker={() => setTrackerOpen(true)}
             onOpenAssistant={(t) => openAssistant(t || 'chat')}
-            reseller={reseller}
-            onUpdateReseller={handleUpdateReseller}
+            onOpenGestorPortal={() => navigateGestor(true)}
             directWaUrl={directWaUrl}
             canPromptInstall={Boolean(installPrompt)}
             isInstalled={isInstalled}
@@ -2189,9 +2312,9 @@ export function App() {
             initialTab={assistantTab}
             products={products}
             categories={categories}
-            settings={settings}
+            settings={effectiveSettings}
             displayCurrency={displayCurrency}
-            reseller={reseller}
+            reseller={effectiveReseller}
             compareIds={compareIds}
             onToggleCompare={toggleCompareId}
             onClearCompare={() => setCompareIds([])}

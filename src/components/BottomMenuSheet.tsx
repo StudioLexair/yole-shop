@@ -4,7 +4,6 @@ import {
   Briefcase,
   Check,
   ChevronRight,
-  Copy,
   Download,
   Heart,
   MapPin,
@@ -17,12 +16,10 @@ import {
   Truck,
   X,
 } from 'lucide-react';
-import type { Currency, Department, ResellerConfig, StoreSettings } from '../types';
+import type { Currency, Department, StoreSettings } from '../types';
 import type { SheinSubFilter, ThemeMode } from '../lib/catalog';
 import { subscribeStoreAlerts } from '../lib/catalog';
 import {
-  buildReferralShareUrl,
-  DEFAULT_RESELLER_CONFIG,
   markAlertSubscribedLocal,
   readAlertSubscribed,
   triggerBrowserDropNotification,
@@ -57,8 +54,7 @@ interface BottomMenuSheetProps {
   onChangeCurrency: (c: Currency) => void;
   onOpenTracker: () => void;
   onOpenAssistant?: (tab?: 'chat' | 'solar' | 'compare' | 'kit') => void;
-  reseller?: ResellerConfig;
-  onUpdateReseller?: (cfg: ResellerConfig) => void;
+  onOpenGestorPortal?: () => void;
   directWaUrl: string;
   canPromptInstall: boolean;
   isInstalled: boolean;
@@ -83,16 +79,13 @@ export function BottomMenuSheet({
   onChangeCurrency,
   onOpenTracker,
   onOpenAssistant,
-  reseller = DEFAULT_RESELLER_CONFIG,
-  onUpdateReseller,
+  onOpenGestorPortal,
   directWaUrl,
   canPromptInstall,
   isInstalled,
   onInstallApp,
 }: BottomMenuSheetProps) {
   const [showManualInstall, setShowManualInstall] = useState(false);
-  const [resellerOpen, setResellerOpen] = useState(reseller.enabled);
-  const [copiedRef, setCopiedRef] = useState(false);
   const [alertSubscribed, setAlertSubscribed] = useState(() => readAlertSubscribed());
   const [alertContact, setAlertContact] = useState('');
   const [alertSaving, setAlertSaving] = useState(false);
@@ -436,106 +429,28 @@ export function BottomMenuSheet({
             )}
           </div>
 
-          {/* Modo Revendedor / Gestor con Margen Propio */}
-          {onUpdateReseller && (
+          {/* Programa Gestor PRO (página dedicada con verificación manual) */}
+          {onOpenGestorPortal && (
             <div className="sheet-section">
               <button
                 type="button"
-                className={`sheet-nav-item${reseller.enabled ? ' is-active' : ''}`}
-                onClick={() => setResellerOpen((v) => !v)}
+                className="sheet-gestor-pro-btn"
+                onClick={() => {
+                  onClose();
+                  onOpenGestorPortal();
+                }}
               >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                  <Briefcase size={15} />
-                  Modo Gestor / Revendedor
-                </span>
-                <span className="sheet-nav-right">
-                  <strong>{reseller.enabled ? 'Activo' : 'Off'}</strong>
-                  <ChevronRight size={16} />
-                </span>
-              </button>
-
-              {resellerOpen && (
-                <div className="sheet-reseller-box">
-                  <label className="sheet-check-row">
-                    <input
-                      type="checkbox"
-                      checked={reseller.enabled}
-                      onChange={(e) =>
-                        onUpdateReseller({ ...reseller, enabled: e.target.checked })
-                      }
-                    />
-                    <span>Mostrar precios con mi ganancia sumada</span>
-                  </label>
-
-                  <div className="sheet-reseller-grid">
-                    <select
-                      value={reseller.mode}
-                      onChange={(e) =>
-                        onUpdateReseller({
-                          ...reseller,
-                          mode: e.target.value === 'pct' ? 'pct' : 'usd',
-                        })
-                      }
-                    >
-                      <option value="usd">+ $ USD fijo</option>
-                      <option value="pct">+ % porcentaje</option>
-                    </select>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={reseller.value}
-                      onChange={(e) =>
-                        onUpdateReseller({
-                          ...reseller,
-                          value: Math.max(0, Number(e.target.value) || 0),
-                        })
-                      }
-                      placeholder="Margen"
-                    />
+                <div className="sheet-gestor-pro-btn__left">
+                  <Briefcase size={17} />
+                  <div>
+                    <strong>
+                      Modo Gestor <span className="pro-badge">PRO</span>
+                    </strong>
+                    <small>¿Quieres vender Yole Shop con tus precios? Solicita cuenta</small>
                   </div>
-
-                  <input
-                    type="text"
-                    placeholder="Tu nombre / alias de gestor (ej. CARLOS)"
-                    value={reseller.gestorName}
-                    onChange={(e) =>
-                      onUpdateReseller({ ...reseller, gestorName: e.target.value })
-                    }
-                  />
-
-                  <label className="sheet-check-row">
-                    <input
-                      type="checkbox"
-                      checked={reseller.hideYoleSku}
-                      onChange={(e) =>
-                        onUpdateReseller({ ...reseller, hideYoleSku: e.target.checked })
-                      }
-                    />
-                    <span>Ocultar códigos SKU internos al compartir</span>
-                  </label>
-
-                  {reseller.gestorName.trim() && (
-                    <button
-                      type="button"
-                      className="btn btn--outline-dark btn--sm"
-                      onClick={() => {
-                        const url = buildReferralShareUrl(reseller.gestorName);
-                        void navigator.clipboard?.writeText(url);
-                        setCopiedRef(true);
-                        setTimeout(() => setCopiedRef(false), 1800);
-                      }}
-                    >
-                      {copiedRef ? <Check size={14} /> : <Copy size={14} />}
-                      <span>
-                        {copiedRef
-                          ? 'Enlace de referido copiado'
-                          : `Copiar enlace ?ref=${reseller.gestorName.trim().toUpperCase()}`}
-                      </span>
-                    </button>
-                  )}
                 </div>
-              )}
+                <ChevronRight size={17} />
+              </button>
             </div>
           )}
 

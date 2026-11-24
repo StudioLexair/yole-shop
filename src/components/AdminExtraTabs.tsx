@@ -13,6 +13,8 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  UserCheck,
+  Users,
 } from 'lucide-react';
 import type {
   AlertSubscriber,
@@ -20,6 +22,8 @@ import type {
   CouponDiscountType,
   CustomSynonymsMap,
   Department,
+  GestorProfile,
+  GestorStatus,
   PaymentChannelKey,
   PaymentRatesMap,
   Product,
@@ -27,6 +31,12 @@ import type {
   SizeRequestStatus,
   StoreSettings,
 } from '../types';
+import {
+  adminDeleteGestor,
+  adminFetchAllGestores,
+  adminUpdateGestorStatus,
+  buildGestorShareUrl,
+} from '../lib/gestorService';
 import { DEFAULT_PAYMENT_RATES, DEPARTMENT_LABELS } from '../types';
 import {
   deleteCoupon,
@@ -943,6 +953,270 @@ export function AdminMarketingTab({
           </div>
         )}
       </div>
+    </section>
+  );
+}
+
+/* ========================= GESTORES PRO MODERATION TAB ========================= */
+
+const GESTOR_STATUS_LABELS: Record<GestorStatus, string> = {
+  pending: 'Pendiente verificación',
+  active: 'Activo (Verificado)',
+  suspended: 'Pausado',
+  rejected: 'Rechazado',
+};
+
+export function AdminGestoresTab({
+  onToast,
+}: {
+  onToast: (msg: string) => void;
+}) {
+  const [gestores, setGestores] = useState<GestorProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | GestorStatus>('all');
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await adminFetchAllGestores();
+      setGestores(list);
+      const nextNotes: Record<string, string> = {};
+      for (const g of list) nextNotes[g.id] = g.admin_note || '';
+      setNotes(nextNotes);
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Error cargando gestores');
+    } finally {
+      setLoading(false);
+    }
+  }, [onToast]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const handleSetStatus = async (g: GestorProfile, nextStatus: GestorStatus) => {
+    setBusyId(g.id);
+    try {
+      const updated = await adminUpdateGestorStatus(g.id, nextStatus, notes[g.id] ?? '');
+      setGestores((prev) => prev.map((x) => (x.id === g.id ? updated : x)));
+      onToast(`${g.full_name} → ${GESTOR_STATUS_LABELS[nextStatus]}`);
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'No se pudo actualizar estado');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (g: GestorProfile) => {
+    if (!window.confirm(`¿Eliminar solicitud de ${g.full_name} (?g=${g.slug})?`)) return;
+    setBusyId(g.id);
+    try {
+      await adminDeleteGestor(g.id);
+      setGestores((prev) => prev.filter((x) => x.id !== g.id));
+      onToast('Gestor eliminado');
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Error al eliminar gestor');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const visible = useMemo(() => {
+    if (filter === 'all') return gestores;
+    return gestores.filter((g) => g.status === filter);
+  }, [gestores, filter]);
+
+  const counts = useMemo(() => {
+    return {
+      all: gestores.length,
+      pending: gestores.filter((g) => g.status === 'pending').length,
+      active: gestores.filter((g) => g.status === 'active').length,
+      suspended: gestores.filter((g) => g.status === 'suspended').length,
+      rejected: gestores.filter((g) => g.status === 'rejected').length,
+    };
+  }, [gestores]);
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <div>
+          <h2>
+            <Users size={18} /> Verificación de Gestores PRO ({gestores.length})
+          </h2>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+            Revisa Carnet de Identidad, teléfono y dirección antes de activar el permiso para editar
+            precios por encima.
+          </p>
+        </div>
+        <button type="button" className="btn-outline" onClick={() => void load()}>
+          <RefreshCw size={15} /> Recargar
+        </button>
+      </div>
+
+      <div className="quick-pills" style={{ marginBottom: 14 }}>
+        <button
+          type="button"
+          className={`chip${filter === 'all' ? ' is-active' : ''}`}
+          onClick={() => setFilter('all')}
+        >
+          Todos ({counts.all})
+        </button>
+        <button
+          type="button"
+          className={`chip${filter === 'pending' ? ' is-active' : ''}`}
+          onClick={() => setFilter('pending')}
+        >
+          Pendientes ({counts.pending})
+        </button>
+        <button
+          type="button"
+          className={`chip${filter === 'active' ? ' is-active' : ''}`}
+          onClick={() => setFilter('active')}
+        >
+          Activos ({counts.active})
+        </button>
+        <button
+          type="button"
+          className={`chip${filter === 'suspended' ? ' is-active' : ''}`}
+          onClick={() => setFilter('suspended')}
+        >
+          Pausados ({counts.suspended})
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="muted-empty">Cargando solicitudes de Gestores PRO...</p>
+      ) : visible.length === 0 ? (
+        <p className="muted-empty">No hay gestores en esta vista.</p>
+      ) : (
+        <div className="gestor-admin-list">
+          {visible.map((g) => {
+            const waDigits = normalizeWhatsAppDigits(g.phone || g.contact_whatsapp);
+            const shareUrl = buildGestorShareUrl(g.slug);
+            return (
+              <article key={g.id} className={`gestor-admin-card is-${g.status}`}>
+                <div className="gestor-admin-card__head">
+                  <div>
+                    <strong>{g.full_name}</strong>
+                    <span className={`gestor-status-badge is-${g.status}`}>
+                      {GESTOR_STATUS_LABELS[g.status]}
+                    </span>
+                  </div>
+                  <small>{new Date(g.created_at).toLocaleString('es-ES')}</small>
+                </div>
+
+                <div className="gestor-admin-grid">
+                  <div>
+                    <small>Teléfono / WhatsApp</small>
+                    <b>{g.phone}</b>
+                  </div>
+                  <div>
+                    <small>Carnet de Identidad (CI)</small>
+                    <b>{g.ci_number}</b>
+                  </div>
+                  <div>
+                    <small>Municipio / Provincia</small>
+                    <b>{g.municipality || '—'}</b>
+                  </div>
+                  <div>
+                    <small>Enlace asignado</small>
+                    <b>?g={g.slug}</b>
+                  </div>
+                  <div className="gestor-admin-grid__full">
+                    <small>Dirección completa</small>
+                    <b>{g.address}</b>
+                  </div>
+                  {g.store_label && (
+                    <div className="gestor-admin-grid__full">
+                      <small>Nombre catálogo público</small>
+                      <b>{g.store_label}</b>
+                    </div>
+                  )}
+                </div>
+
+                <div className="gestor-admin-note-row">
+                  <input
+                    type="text"
+                    placeholder="Nota interna de verificación (ej. CI comprobado por videollamada)"
+                    value={notes[g.id] ?? ''}
+                    onChange={(e) =>
+                      setNotes((prev) => ({ ...prev, [g.id]: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="gestor-admin-actions">
+                  {g.status !== 'active' && (
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      disabled={busyId === g.id}
+                      onClick={() => void handleSetStatus(g, 'active')}
+                    >
+                      <UserCheck size={14} /> Verificar y Activar
+                    </button>
+                  )}
+                  {g.status === 'active' && (
+                    <button
+                      type="button"
+                      className="btn btn--outline-dark btn--sm"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(shareUrl);
+                        onToast(`Copiado: ${shareUrl}`);
+                      }}
+                    >
+                      <Copy size={14} /> Copiar enlace ?g={g.slug}
+                    </button>
+                  )}
+                  {g.status !== 'suspended' && g.status !== 'rejected' && (
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      disabled={busyId === g.id}
+                      onClick={() => void handleSetStatus(g, 'suspended')}
+                    >
+                      Pausar
+                    </button>
+                  )}
+                  {g.status === 'pending' && (
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      disabled={busyId === g.id}
+                      onClick={() => void handleSetStatus(g, 'rejected')}
+                    >
+                      Rechazar
+                    </button>
+                  )}
+                  {waDigits && (
+                    <a
+                      href={buildWhatsAppUrl(
+                        waDigits,
+                        `Hola ${g.full_name}, te escribimos de Yole Shop respecto a tu solicitud de Gestor PRO (?g=${g.slug}).`
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn--whatsapp btn--sm"
+                    >
+                      <MessageCircle size={14} /> WhatsApp
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-icon-danger"
+                    title="Eliminar gestor"
+                    onClick={() => void handleDelete(g)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

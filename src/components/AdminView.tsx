@@ -28,6 +28,7 @@ import {
   Sun,
   Tag,
   Trash2,
+  Users,
   X,
   Zap,
 } from 'lucide-react';
@@ -78,6 +79,7 @@ import {
 import {
   AdminAnalyticsTab,
   AdminCouponsTab,
+  AdminGestoresTab,
   AdminMarketingTab,
   AdminRequestsTab,
 } from './AdminExtraTabs';
@@ -108,6 +110,7 @@ type AdminTab =
   | 'photosync'
   | 'presets'
   | 'orders'
+  | 'gestores'
   | 'requests'
   | 'coupons'
   | 'marketing'
@@ -213,6 +216,7 @@ export function AdminView({
     });
   };
   const [session, setSession] = useState<Session | null>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [email, setEmail] = useState('studio.lexair@gmail.com');
   const [password, setPassword] = useState('');
@@ -330,14 +334,38 @@ export function AdminView({
   }, [pricePresets]);
 
   useEffect(() => {
+    let active = true;
+    const checkAdmin = async (s: Session | null) => {
+      if (!s) {
+        if (active) {
+          setSession(null);
+          setIsAdminUser(false);
+          setAuthLoading(false);
+        }
+        return;
+      }
+      const { data: adm } = await supabase
+        .from('admin_users')
+        .select('user_id')
+        .eq('user_id', s.user.id)
+        .maybeSingle();
+      if (active) {
+        setSession(s);
+        setIsAdminUser(Boolean(adm));
+        setAuthLoading(false);
+      }
+    };
+
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setAuthLoading(false);
+      void checkAdmin(data.session);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_ev, s) => {
-      setSession(s);
+      void checkAdmin(s);
     });
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const loadOrders = async () => {
@@ -1221,6 +1249,45 @@ export function AdminView({
     );
   }
 
+  if (!isAdminUser) {
+    return (
+      <div className="admin-login-page">
+        <div className="admin-login-card">
+          <button type="button" className="btn-link" onClick={onBackToStore}>
+            <ArrowLeft size={16} /> Volver a {settings.store_name}
+          </button>
+          <div className="admin-login-head">
+            <Lock size={38} style={{ color: '#e11d48', marginBottom: 8 }} />
+            <h1>Acceso Restringido</h1>
+            <p>
+              La sesión actual no tiene permisos de Administrador. Los gestores solo pueden operar
+              desde el Portal de Gestores PRO.
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button
+              type="button"
+              className="btn btn--primary btn--block"
+              onClick={() => {
+                window.history.pushState({}, '', '/gestor');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+            >
+              Ir a mi Portal de Gestor PRO
+            </button>
+            <button
+              type="button"
+              className="btn btn--outline-dark btn--block"
+              onClick={() => void handleLogout()}
+            >
+              Cerrar sesión y entrar como Admin
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-shell">
       <header className="admin-topbar">
@@ -1266,6 +1333,13 @@ export function AdminView({
             onClick={() => setTab('orders')}
           >
             <ShoppingCart size={16} /> Pedidos
+          </button>
+          <button
+            type="button"
+            className={tab === 'gestores' ? 'is-active' : ''}
+            onClick={() => setTab('gestores')}
+          >
+            <Users size={16} /> Gestores PRO
           </button>
           <button
             type="button"
@@ -2394,6 +2468,8 @@ export function AdminView({
         )}
 
         {tab === 'coupons' && <AdminCouponsTab onToast={showToast} />}
+
+        {tab === 'gestores' && <AdminGestoresTab onToast={showToast} />}
 
         {tab === 'marketing' && (
           <AdminMarketingTab
