@@ -6579,6 +6579,29 @@ select,
   border-color: #fafafa;
 }
 
+@media (max-width: 640px) {
+  .dept-subbar {
+    gap: 6px;
+  }
+
+  .dept-subpill {
+    height: 33px;
+    padding: 0 10px;
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  .dept-subpill__tag {
+    font-size: 8.5px;
+    padding: 1px 5px;
+  }
+
+  .dept-subpill__count {
+    font-size: 10.5px;
+    padding: 1px 6px;
+  }
+}
+
 
 
 
