@@ -2110,13 +2110,40 @@ button, input, select, textarea {
     flex-shrink: 0;
   }
   .admin-topbar__left {
-    flex: 1;
+    flex: 1 1 0%;
     min-width: 0;
+    gap: 8px;
   }
+  .admin-topbar__left > div {
+    min-width: 0;
+    flex: 1;
+  }
+  .admin-topbar__left strong,
   .admin-topbar__left small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: block;
+  }
+  .admin-topbar-logo {
+    width: 30px;
+    height: 30px;
+  }
+  .admin-topbar__right {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  .admin-topbar__right .btn-ghost {
+    padding: 6px 9px;
+  }
+  @media (max-width: 520px) {
+    .admin-topbar__left .btn-ghost span,
+    .admin-topbar__right .btn-ghost span {
+      display: none;
+    }
+    .admin-topbar__left .btn-ghost {
+      padding: 6px 9px;
+    }
   }
   .admin-toolbar__actions .search-box {
     flex: 1 1 100%;
