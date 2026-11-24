@@ -5005,6 +5005,11 @@ select,
   gap: 12px;
 }
 
+.version-admin-cards .kpi-card small {
+  display: block;
+  margin-top: 3px;
+}
+
 @media (max-width: 720px) {
   .version-admin-cards {
     grid-template-columns: 1fr;
