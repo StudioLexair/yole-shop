@@ -1165,7 +1165,7 @@ export function App() {
                 ref={searchInputRef}
                 type="search"
                 aria-label="Buscar en todo el catálogo"
-                placeholder="Buscar tenis, EcoFlow, motorina, vestido o ej. 'menos de $25'..."
+                placeholder="Buscar tenis, EcoFlow, moto, motor Lifan o ej. 'menos de $25'..."
                 value={search}
                 onFocus={() => setSearchFocused(true)}
                 onKeyDown={(e) => {

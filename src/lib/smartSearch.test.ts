@@ -18,6 +18,9 @@ const categories: Category[] = [
   { id: 'moda-hombre', name: 'Moda Hombre', department: 'hombre', sort_order: 30 },
   { id: 'bolsos-relojes', name: 'Carteras y Relojes', department: 'accesorios', sort_order: 40 },
   { id: 'motos-electricas', name: 'Motorinas Eléctricas', department: 'movilidad', sort_order: 50 },
+  { id: 'motos-gasolina', name: 'Motos Gasolina & Motonetas', department: 'movilidad', sort_order: 52 },
+  { id: 'triciclos-electricos', name: 'Triciclos Eléctricos', department: 'movilidad', sort_order: 54 },
+  { id: 'motores-baterias', name: 'Motores & Baterías', department: 'movilidad', sort_order: 56 },
   { id: 'estaciones-energia', name: 'Estaciones de Energía', department: 'solares', sort_order: 60 },
 ];
 
@@ -181,6 +184,106 @@ const products: Product[] = [
     featured: true,
     source_group: 'equipos_solares',
     sort_order: 80,
+  },
+  {
+    id: '9',
+    sku: 'VIR-075',
+    title: 'Unidad / Motor LIFAN 250cc (Con Accesorios)',
+    brand: 'Lifan',
+    department: 'movilidad',
+    category_id: 'motores-baterias',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 935,
+    price: 985,
+    sizes: ['250cc + Accesorios'],
+    fit_note: 'Unidad Lifan 250 cc para remotorizar con factura',
+    image_url: 'https://x.test/lifan250.webp',
+    image_path: 'lifan250.webp',
+    status: 'active',
+    featured: false,
+    source_group: 'todo_virginia',
+    sort_order: 90,
+  },
+  {
+    id: '10',
+    sku: 'VIR-074',
+    title: 'Unidad / Motor AX 100 (Sin Accesorios)',
+    brand: 'AX 100',
+    department: 'movilidad',
+    category_id: 'motores-baterias',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 590,
+    price: 620,
+    sizes: ['AX 100'],
+    fit_note: 'Unidad de motor AX 100 sin accesorios.',
+    image_url: 'https://x.test/ax100.webp',
+    image_path: 'ax100.webp',
+    status: 'active',
+    featured: false,
+    source_group: 'todo_virginia',
+    sort_order: 100,
+  },
+  {
+    id: '11',
+    sku: 'VIR-056',
+    title: 'Kit Completo de Triciclo (Diferencial y Eje)',
+    brand: 'Todo Virginia',
+    department: 'movilidad',
+    category_id: 'motores-baterias',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 1185,
+    price: 1235,
+    sizes: ['Kit Completo'],
+    fit_note: 'Kit mecánico completo para montaje de triciclo.',
+    image_url: 'https://x.test/kit.webp',
+    image_path: 'kit.webp',
+    status: 'active',
+    featured: false,
+    source_group: 'todo_virginia',
+    sort_order: 110,
+  },
+  {
+    id: '12',
+    sku: 'VIR-049',
+    title: 'Moto LIFAN 250cc con Derecho a Chapa (Roja)',
+    brand: 'Lifan',
+    department: 'movilidad',
+    category_id: 'motos-gasolina',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 2270,
+    price: 2320,
+    sizes: ['Rojo'],
+    fit_note: '250 cc con derecho a chapa a nombre del cliente.',
+    image_url: 'https://x.test/lifanmoto.webp',
+    image_path: 'lifanmoto.webp',
+    status: 'active',
+    featured: false,
+    source_group: 'todo_virginia',
+    sort_order: 120,
+  },
+  {
+    id: '13',
+    sku: 'VIR-014',
+    title: 'Triciclo Eléctrico 8 Plazas con Techo 72V 58Ah',
+    brand: 'Todo Virginia',
+    department: 'movilidad',
+    category_id: 'triciclos-electricos',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 3700,
+    price: 3750,
+    sizes: ['Negro'],
+    fit_note: '8 plazas con techo de lona, autonomía 100 km',
+    image_url: 'https://x.test/trike.webp',
+    image_path: 'trike.webp',
+    status: 'active',
+    featured: true,
+    source_group: 'todo_virginia',
+    sort_order: 130,
   },
 ];
 
@@ -422,5 +525,49 @@ describe('smartSearch engine', () => {
     expect(readSearchHistory()).toEqual(['Jordan 4', 'EcoFlow']);
     removeSearchHistoryItem('EcoFlow');
     expect(readSearchHistory()).toEqual(['Jordan 4']);
+  });
+
+  it('domina búsquedas de vehículos, motores, remotorización, mototaxis y pares V/Ah', () => {
+    const run = (q: string) =>
+      filterProducts(
+        products,
+        {
+          department: 'all',
+          categoryId: 'all',
+          size: 'all',
+          search: q,
+          onlyPriced: false,
+          includeSoldOut: false,
+          sort: 'featured',
+        },
+        980,
+        categories,
+        lexicon
+      ).map((p) => p.sku);
+
+    // "motor 250" prioriza primero la unidad/motor 250cc y también encuentra moto 250cc
+    expect(run('motor 250')[0]).toBe('VIR-075');
+    // "ax100" sin espacio encuentra "Unidad / Motor AX 100"
+    expect(run('ax100')).toEqual(['VIR-074']);
+    // "remotorizar" encuentra unidades de motor (Lifan 250cc primero, luego AX 100)
+    expect(run('remotorizar')).toEqual(['VIR-075', 'VIR-074']);
+    // "motos de combustion" prioriza moto de gasolina y excluye eléctricas
+    const combustionHits = run('motos de combustion');
+    expect(combustionHits[0]).toBe('VIR-049');
+    expect(combustionHits).not.toContain('VIR-001');
+    expect(combustionHits).not.toContain('VIR-014');
+    // "mototaxi techo" encuentra triciclo con techo y plazas
+    expect(run('mototaxi techo')).toEqual(['VIR-014']);
+    // "repuestos diferencial" encuentra kit diferencial y eje
+    expect(run('repuestos diferencial')).toEqual(['VIR-056']);
+    // Par numérico "72 45" sin letras V ni Ah
+    expect(run('motorina 72 45')).toEqual(['VIR-001']);
+    // Papeles / con chapa encuentra motos con chapa y factura
+    expect(run('moto papeles')).toContain('VIR-049');
+
+    // Sugerencias contextuales de movilidad
+    const motoSuggestions = buildSearchSuggestions('motor lifan', products, categories, 980, lexicon);
+    expect(motoSuggestions.intentBadges).toContain('Motores & Baterías');
+    expect(motoSuggestions.quickChips).toContain('Con Chapa');
   });
 });

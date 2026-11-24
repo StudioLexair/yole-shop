@@ -20,6 +20,7 @@ export interface ParsedSmartQuery {
   textTokens: string[];
   correctedTokens: string[];
   departmentHints: Department[];
+  categoryBoostIds: string[];
   detectedBrand: string | null;
   minUsd: number | null;
   maxUsd: number | null;
@@ -157,6 +158,46 @@ const TOKEN_ALIASES: Record<string, string> = {
   bedca: 'vedca',
   bukati: 'bucatti',
   bucati: 'bucatti',
+  motostrek: 'motorstreck',
+  motorstrek: 'motorstreck',
+  motostreck: 'motorstreck',
+  kivitoba: 'kivitova',
+  kivitowa: 'kivitova',
+  kvitoba: 'kvitova',
+  kvitowa: 'kvitova',
+  mishosuki: 'mishozuki',
+  mizosuki: 'mishozuki',
+  misozuki: 'mishozuki',
+  tamobike: 'tamobyke',
+  eskut: 'eskute',
+  escute: 'eskute',
+  trek: 'treck',
+  isuki: 'izuki',
+  izuky: 'izuki',
+  proeza: 'proezza',
+  chalenger: 'challenger',
+  torban: 'torvan',
+  onebot: 'onebot',
+  sunshain: 'sunshine',
+  fons: 'fonts',
+  lifann: 'lifan',
+  lyfan: 'lifan',
+  beraa: 'vera',
+  unisonn: 'unison',
+  motocros: 'cross',
+  trisiclo: 'triciclo',
+  trisiclos: 'triciclo',
+  motoneeta: 'motoneta',
+  remotorisar: 'remotorizar',
+  remotorizacion: 'remotorizar',
+  diferensial: 'diferencial',
+  hidrauliko: 'hidraulico',
+  idraulico: 'hidraulico',
+  polifosfatos: 'polifosfato',
+  shimanoo: 'shimano',
+  bicikleta: 'bicicleta',
+  gasolinaa: 'gasolina',
+  conbustion: 'combustion',
   lifepo: 'lifepo4',
   lipo: 'litio',
   lition: 'litio',
@@ -269,20 +310,70 @@ const SYNONYM_GROUPS: Record<string, string[]> = {
   accesorios: ['accesorios', 'cartera', 'bolso', 'reloj', 'audifonos', 'casio', 'olevs'],
   moto: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica', 'chapa'],
   motos: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica', 'chapa'],
-  motorina: ['motorina', 'motorinas', 'moto', 'scooter', 'electrica', 'bicimoto'],
-  motorinas: ['motorina', 'motorinas', 'moto', 'scooter', 'electrica', 'bicimoto'],
+  motorina: ['motorina', 'motorinas', 'scooter', 'pasola', 'motorinas electricas'],
+  motorinas: ['motorina', 'motorinas', 'scooter', 'pasola', 'motorinas electricas'],
   motico: ['motorina', 'bicimoto', 'bici', 'scooter'],
   pasola: ['motorina', 'scooter', 'bicimoto'],
   bicimoto: ['bicimoto', 'bicimotos', 'bici', 'bicicleta', 'electrica'],
   bicimotos: ['bicimoto', 'bicimotos', 'bici', 'bicicleta', 'electrica'],
   bici: ['bici', 'bicicleta', 'bicimoto', 'plegable', 'eskute', 'tamobyke'],
-  triciclo: ['triciclo', 'triciclos', 'carga', 'pasajero', 'techo'],
-  triciclos: ['triciclo', 'triciclos', 'carga', 'pasajero', 'techo'],
+  bicicleta: ['bicicleta', 'bici', 'bicimoto', 'plegable', 'eskute', 'tamobyke'],
+  plegable: ['plegable', 'ava', '500w'],
+  doblable: ['plegable', 'ava', '500w'],
+  todoterreno: ['todoterreno', 'todo terreno', 'fat-tire', 'cross', '4000w', 'tamobyke'],
+  terreno: ['todoterreno', 'todo terreno', 'fat-tire', 'cross', 'tamobyke'],
+  cross: ['cross', '4000w', '52 mph', 'todoterreno'],
+  montana: ['cross', 'todoterreno', 'fat-tire', 'tamobyke'],
+  deportiva: ['deportiva', 'huracan', 'vera', 'kvitova', 'topmaq', 'caja 6ta'],
+  deportivo: ['deportiva', 'huracan', 'vera', 'kvitova', 'topmaq'],
+  sexta: ['6ta', 'caja 6ta', 'vera'],
+  triciclo: ['triciclo', 'triciclos', 'carga', 'pasajero', 'techo', 'motoneta'],
+  triciclos: ['triciclo', 'triciclos', 'carga', 'pasajero', 'techo', 'motoneta'],
+  motoneta: ['motoneta', 'triciclo', 'treck', 'lifan', '300cc', '250cc', 'plazas', 'pasajeros'],
+  motonetas: ['motoneta', 'triciclo', 'treck', 'lifan', '300cc', '250cc', 'plazas', 'pasajeros'],
+  mototaxi: ['pasajero', 'pasajeros', 'plazas', 'techo', 'cabina', 'motoneta', 'triciclo'],
+  taxi: ['pasajero', 'pasajeros', 'plazas', 'techo', 'cabina', 'motoneta', 'triciclo'],
+  pasajero: ['pasajero', 'pasajeros', 'plazas', 'techo', 'cabina', 'motoneta', 'triciclo'],
+  pasajeros: ['pasajero', 'pasajeros', 'plazas', 'techo', 'cabina', 'motoneta', 'triciclo'],
+  plazas: ['plazas', 'pasajeros', 'motoneta', 'triciclo', 'techo'],
+  carga: ['carga', 'volteo', 'tolva', 'cama', 'baranda', 'doble fuerza', 'oim', 'idon', 'viento rapido'],
+  volteo: ['volteo', 'hidraulico', 'carga', 'oim', 'viento rapido'],
+  tolva: ['tolva', 'cama', 'carga', 'kivitova', 'oim'],
+  diferencial: ['diferencial', 'eje', 'cardan', 'kit', 'triciclo', 'enmangado', 'enmangada'],
+  eje: ['diferencial', 'eje', 'kit', 'triciclo'],
+  cardan: ['cardan', 'diferencial', 'enmangado', 'motoneta'],
+  repuesto: ['kit', 'diferencial', 'eje', 'unidad', 'motor', 'bateria', 'catl', 'mishozuki'],
+  repuestos: ['kit', 'diferencial', 'eje', 'unidad', 'motor', 'bateria', 'catl', 'mishozuki'],
+  piezas: ['kit', 'diferencial', 'eje', 'unidad', 'motor', 'bateria'],
   bateria: ['bateria', 'baterias', 'litio', 'lifepo4', 'polifosfato', 'gel', 'catl'],
   baterias: ['bateria', 'baterias', 'litio', 'lifepo4', 'polifosfato', 'gel', 'catl'],
   pila: ['bateria', 'baterias', 'litio', 'lifepo4'],
   litio: ['litio', 'lifepo4', 'catl', 'bateria'],
-  motor: ['motor', 'motores', 'unidad', 'chapa', 'kit', 'lifan'],
+  motor: ['unidad', 'unidades', 'maquina', 'lifan', 'fonts', 'ax 100', 'remotorizar', 'diferencial', 'motores'],
+  motores: ['unidad', 'unidades', 'maquina', 'lifan', 'fonts', 'ax 100', 'remotorizar', 'diferencial', 'motores'],
+  unidad: ['unidad', 'unidades', 'maquina', 'remotorizar', 'lifan', 'fonts', 'ax 100'],
+  unidades: ['unidad', 'unidades', 'maquina', 'remotorizar', 'lifan', 'fonts', 'ax 100'],
+  maquina: ['maquina', 'unidad', 'kivitova', 'lifan', 'fonts'],
+  remotorizar: ['remotorizar', 'unidad', 'maquina', 'factura', 'transito'],
+  gasolina: ['gasolina', 'cc', '125cc', '150cc', '250cc', '300cc', 'lifan', 'treck', 'unison', 'vera', 'izuki', 'fonts', 'motoneta', 'motorstreck'],
+  combustion: ['gasolina', 'cc', '125cc', '150cc', '250cc', '300cc', 'lifan', 'treck', 'unison', 'vera', 'izuki', 'fonts', 'motoneta'],
+  chapa: ['chapa', 'factura', 'circulacion', 'traspaso', 'certifico', 'remotorizar', 'transito'],
+  papeles: ['chapa', 'factura', 'circulacion', 'traspaso', 'certifico', 'remotorizar', 'transito'],
+  circulacion: ['circulacion', 'chapa', 'certifico', 'traspaso', 'factura'],
+  traspaso: ['traspaso', 'chapa', 'circulacion', 'factura'],
+  factura: ['factura', 'chapa', 'remotorizar', 'cliente'],
+  transito: ['transito', 'remotorizar', 'factura', 'chapa'],
+  kvitova: ['kvitova', 'kivitova'],
+  kivitova: ['kivitova', 'kvitova'],
+  canasta: ['cesta', 'delantera'],
+  musica: ['bluetooth', 'musica', 'usb'],
+  electrica: ['electrica', 'electrico', 'litio', 'gel', 'lifepo4', 'polifosfato', '48v', '60v', '72v', 'motorina', 'bicimoto', 'triciclo'],
+  electrico: ['electrica', 'electrico', 'litio', 'gel', 'lifepo4', 'polifosfato', '48v', '60v', '72v', 'motorina', 'bicimoto', 'triciclo'],
+  '125': ['125cc', '125'],
+  '150': ['150cc', '150'],
+  '250': ['250cc', '250'],
+  '300': ['300cc', '300'],
+  '100': ['ax 100', '100', '100ah'],
   virginia: ['virginia', 'moto', 'motorina', 'triciclo', 'bicimoto', 'bateria'],
   solar: ['solar', 'solares', 'panel', 'paneles', 'inversor', 'estacion', 'lifepo4', 'ecoflow', 'bluetti'],
   solares: ['solar', 'solares', 'panel', 'paneles', 'inversor', 'estacion', 'lifepo4', 'ecoflow', 'bluetti'],
@@ -389,6 +480,27 @@ const CURATED_VOCAB: ReadonlyArray<readonly [string, string]> = [
   ['bucatti', 'Bucatti'],
   ['lifan', 'Lifan'],
   ['kivitova', 'Kivitova'],
+  ['kvitova', 'Kvitova'],
+  ['mishozuki', 'Mishozuki'],
+  ['motorstreck', 'Motorstreck'],
+  ['tamobyke', 'Tamobyke'],
+  ['eskute', 'Eskute'],
+  ['treck', 'Treck'],
+  ['izuki', 'Izuki'],
+  ['proezza', 'Proezza'],
+  ['torvan', 'Torvan'],
+  ['onebot', 'Onebot'],
+  ['fonts', 'Fonts'],
+  ['sunshine', 'Sunshine'],
+  ['motoneta', 'Motoneta'],
+  ['remotorizar', 'Remotorizar'],
+  ['diferencial', 'Diferencial'],
+  ['hidraulico', 'Hidráulico'],
+  ['polifosfato', 'Polifosfato'],
+  ['gasolina', 'Gasolina'],
+  ['chapa', 'Chapa'],
+  ['circulacion', 'Circulación'],
+  ['plegable', 'Plegable'],
 ];
 
 export function buildSearchLexicon(products: Product[], categories: Category[]): SearchLexicon {
@@ -534,13 +646,17 @@ function expandSlangAndUnits(normalized: string): string {
     .replace(/\beco\s+flow\b/g, 'ecoflow')
     .replace(/\bdelta(\d)\b/g, 'delta $1')
     .replace(/\briver(\d)\b/g, 'river $1')
+    .replace(/\bax\s*100\b/g, 'ax 100')
+    .replace(/\bmotor\s+de\s+moto\b/g, 'motor unidad')
+    .replace(/\b(48|52|60|72)\s+(12|15|20|25|30|35|40|45|50|55|56|58|60|70|75|80|90)\b/g, '$1v $2ah')
     .replace(/\b(\d+(?:\.\d+)?)\s*(volts|voltios|volt|v)\b/g, '$1v')
     .replace(/\b(\d+(?:\.\d+)?)\s*(watts|watt|w)\b/g, '$1w')
     .replace(/\b(\d+(?:\.\d+)?)\s*(wh|watt horas|watts horas)\b/g, '$1wh')
     .replace(/\b(\d+(?:\.\d+)?)\s*(kw)\b/g, '$1kw')
     .replace(/\b(\d+(?:\.\d+)?)\s*(kwh)\b/g, '$1kwh')
     .replace(/\b(\d+(?:\.\d+)?)\s*(amperes|amp|ah)\b/g, '$1ah')
-    .replace(/\b(\d+)\s*cc\b/g, '$1cc');
+    .replace(/\b(\d+)\s*cc\b/g, '$1cc')
+    .replace(/\b(\d+)\s*(km|kilometros)\b/g, '$1km');
 }
 
 export function parseSmartQuery(
@@ -693,7 +809,7 @@ export function parseSmartQuery(
     departmentHints.push('accesorios');
   }
   if (
-    /\b(moto|motos|motorina|motorinas|motico|pasola|bicimoto|bicimotos|bici|bicicleta|triciclo|triciclos|virginia|motor|motoneta|topmaq|yoazaky|vedca|bucatti|lifan|kivitova|250cc|150cc)\b/.test(
+    /\b(vehiculo|vehiculos|moto|motos|motorina|motorinas|motico|pasola|bicimoto|bicimotos|bici|bicicleta|triciclo|triciclos|virginia|motor|motores|unidad|unidades|maquina|remotorizar|diferencial|cardan|motoneta|mototaxi|gasolina|combustion|chapa|topmaq|yoazaky|vedca|bucatti|lifan|kivitova|kvitova|mishozuki|tamobyke|eskute|treck|izuki|proezza|torvan|onebot|fonts|sunshine|300cc|250cc|150cc|125cc|ax)\b/.test(
       joinedCorrected
     )
   ) {
@@ -707,12 +823,52 @@ export function parseSmartQuery(
     departmentHints.push('solares');
   }
 
+  const categoryBoostIds: string[] = [];
+  if (
+    /\b(motor|motores|unidad|unidades|maquina|remotorizar|diferencial|eje|repuesto|repuestos|piezas|bateria|baterias|catl|mishozuki|sunshine|fonts|ax)\b/.test(
+      joinedCorrected
+    ) &&
+    !departmentHints.includes('solares')
+  ) {
+    categoryBoostIds.push('motores-baterias');
+  }
+  if (
+    /\b(gasolina|combustion|125cc|150cc|250cc|300cc|125|150|250|300|motoneta|motorstreck|treck|vera|izuki|unison)\b/.test(
+      joinedCorrected
+    )
+  ) {
+    categoryBoostIds.push('motos-gasolina');
+  }
+  if (/\b(motorina|motorinas|pasola|bucatti|jade)\b/.test(joinedCorrected)) {
+    categoryBoostIds.push('motos-electricas');
+  }
+  if (
+    /\b(triciclo|triciclos|mototaxi|volteo|tolva|cama|baranda|cabina|plazas|pasajeros|carga|onebot|oim|idon)\b/.test(
+      joinedCorrected
+    )
+  ) {
+    categoryBoostIds.push('triciclos-electricos');
+  }
+  if (
+    /\b(bicimoto|bicimotos|bici|bicicleta|plegable|shimano|tamobyke|eskute|proezza|challenger|yoazaky|ava)\b/.test(
+      joinedCorrected
+    )
+  ) {
+    categoryBoostIds.push('bicimotos-bicis');
+  }
+
   const intentBadges: string[] = [];
   if (detectedBrand) intentBadges.push(`Marca: ${detectedBrand}`);
   if (priceIntentLabel) intentBadges.push(priceIntentLabel);
   if (sizeHint) intentBadges.push(`Talla ${sizeHint}`);
   if (featuredOnlyHint) intentBadges.push('Solo TOP');
-  if (departmentHints.length === 1) {
+  if (categoryBoostIds.includes('motores-baterias')) intentBadges.push('Motores & Baterías');
+  if (categoryBoostIds.includes('motos-gasolina')) intentBadges.push('Motos Gasolina');
+  if (categoryBoostIds.includes('triciclos-electricos')) intentBadges.push('Triciclos');
+  if (/\b(chapa|papeles|circulacion|traspaso|factura)\b/.test(joinedCorrected)) {
+    intentBadges.push('Con Chapa / Factura');
+  }
+  if (departmentHints.length === 1 && categoryBoostIds.length === 0) {
     const deptLabel: Record<Department, string> = {
       calzado: 'Calzado & Tenis',
       moda_shein: 'Moda Shein',
@@ -738,6 +894,7 @@ export function parseSmartQuery(
     textTokens: rawTokens,
     correctedTokens,
     departmentHints,
+    categoryBoostIds,
     detectedBrand,
     minUsd,
     maxUsd,
@@ -766,15 +923,16 @@ function buildProductHaystack(
         : product.department === 'moda_shein'
           ? 'moda shein mujer dama ropa'
           : product.department === 'movilidad'
-            ? 'motos motorinas bicimotos triciclos baterias motores todo virginia movilidad'
+            ? 'vehiculo vehiculos todo virginia movilidad transporte'
             : product.department === 'solares'
               ? 'equipos solares paneles inversores baterias lifepo4 estaciones energia ecoflow bluetti mppt respaldo'
               : 'accesorios carteras relojes audifonos';
 
   const rawJoined = `${product.sku} ${product.title} ${product.brand} ${categoryName} ${deptText} ${product.quality} ${product.fit_note || ''} ${availableSizes.join(' ')}`;
-  // Add compact forms ("72 v" -> "72v", "1024 wh" -> "1024wh", "110/220v" -> "110v 220v")
+  // Add compact forms ("72 v" -> "72v", "150 cc" -> "150cc 150", "1024 wh" -> "1024wh", "110/220v" -> "110v 220v")
   const compactSpecs = normalizeText(rawJoined)
     .replace(/\b(\d+(?:\.\d+)?)\s*(v|volt|volts|w|watt|watts|wh|kw|kwh|ah|amp|cc|km)\b/g, '$1$2')
+    .replace(/\b(125|150|250|300)\s*cc\b/g, '$1cc $1')
     .replace(/110\s*\/?\s*220v?/g, '110v 220v 110 220');
 
   return {
@@ -786,23 +944,33 @@ function buildProductHaystack(
   };
 }
 
+function hayContainsTerm(hay: string, term: string): boolean {
+  if (term === 'motor') {
+    return /\b(motor|motores)\b/.test(hay);
+  }
+  if (term === 'moto') {
+    return /\b(moto|motos)\b/.test(hay);
+  }
+  return hay.includes(term);
+}
+
 function tokenMatchesHaystack(token: string, hay: string, dept: Department): boolean {
   const canonical = COLOR_NORMALIZATIONS[token] || token;
-  if (hay.includes(token) || (canonical !== token && hay.includes(canonical))) {
+  if (hayContainsTerm(hay, token) || (canonical !== token && hayContainsTerm(hay, canonical))) {
     return true;
   }
 
   // Try stripping Spanish trailing plural -s/-es for words >= 4 chars
-  if (token.length >= 4 && token.endsWith('s') && hay.includes(token.slice(0, -1))) {
+  if (token.length >= 4 && token.endsWith('s') && hayContainsTerm(hay, token.slice(0, -1))) {
     return true;
   }
-  if (token.length >= 5 && token.endsWith('es') && hay.includes(token.slice(0, -2))) {
+  if (token.length >= 5 && token.endsWith('es') && hayContainsTerm(hay, token.slice(0, -2))) {
     return true;
   }
 
   const syns = SYNONYM_GROUPS[token] || SYNONYM_GROUPS[canonical];
   if (syns) {
-    if (syns.some((s) => hay.includes(s))) return true;
+    if (syns.some((s) => hayContainsTerm(hay, s))) return true;
     if (
       (token === 'tenis' || token === 'calzado' || token === 'zapatos' || token === 'zapatillas') &&
       dept === 'calzado'
@@ -819,13 +987,12 @@ function tokenMatchesHaystack(token: string, hay: string, dept: Department): boo
       return true;
     }
     if (
-      (token === 'moto' ||
+      (token === 'vehiculo' ||
+        token === 'vehiculos' ||
+        token === 'moto' ||
         token === 'motos' ||
         token === 'movilidad' ||
-        token === 'virginia' ||
-        token === 'triciclo' ||
-        token === 'motorina' ||
-        token === 'motico') &&
+        token === 'virginia') &&
       dept === 'movilidad'
     ) {
       return true;
@@ -918,6 +1085,7 @@ export function matchSmartProduct(
     if (hay.includes(t)) score += 4;
   }
   if (parsed.departmentHints.includes(product.department)) score += 6;
+  if (parsed.categoryBoostIds.includes(product.category_id)) score += 32;
   if (product.featured) score += 5;
 
   return { matches: true, score };
@@ -998,13 +1166,13 @@ export function buildSearchSuggestions(
       intentBadges: [],
       quickChips: [
         'EcoFlow',
-        'New Balance',
         'Motorinas Litio',
+        'Motores Lifan',
+        'Con Chapa',
+        'New Balance',
         'Jordan 4',
-        'Vestidos',
-        'Paneles Solares',
+        'Triciclos',
         'Hasta $25',
-        'Zuecos Boston',
       ],
       topProducts: [],
       totalMatchCount: active.length,
@@ -1063,6 +1231,20 @@ export function buildSearchSuggestions(
   }
   if (parsed.didYouMean) {
     chipSet.add(parsed.didYouMean);
+  }
+  if (parsed.departmentHints.includes('movilidad')) {
+    for (const extra of [
+      'Motores Lifan',
+      'Con Chapa',
+      'Motos Gasolina',
+      'Motorinas 72V',
+      'Triciclos',
+      'Baterías Litio',
+    ]) {
+      if (!parsed.normalized.includes(normalizeText(extra))) {
+        chipSet.add(extra);
+      }
+    }
   }
 
   return {

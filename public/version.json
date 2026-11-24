@@ -1,13 +1,13 @@
 {
-  "version": "1.5.0",
+  "version": "1.5.1",
   "buildId": "local",
-  "releasedAt": "2026-11-16T21:15:00Z",
+  "releasedAt": "2026-11-16T22:05:00Z",
   "mandatory": false,
-  "title": "Lo más TOP renovado, Solares -USD y Buscador Inteligente Pro",
-  "description": "Ampliamos Lo más TOP con tendencias reales de todas las secciones, bajamos el margen en equipos solares menores a $900 (+$10 USD) y llevamos el buscador inteligente a otro nivel.",
+  "title": "Buscador Inteligente Pro para Vehículos y Motores",
+  "description": "Búsqueda especializada en motos de gasolina/eléctricas, unidades Lifan/Fonts/AX 100, remotorización, chapa, mototaxis, triciclos y pares de voltaje/amperaje.",
   "features": [
-    "Carrusel Lo más TOP renovado con hasta 36 tendencias reales de todas las categorías (Tenis, EcoFlow, Motorinas, Shein y Accesorios)",
-    "Equipos Solares menores de $900 USD actualizados con solo +$10 USD y sin inventar precios faltantes",
-    "Buscador inteligente Pro: entiende jerga cubana, especificaciones técnicas (72V, 1024Wh, 110/220V), abreviaturas, historial reciente y rescate inteligente sin resultados"
+    "Reconocimiento inteligente de motores y unidades (motor 250, ax100, remotorizar, diferencial/eje)",
+    "Búsqueda por jerga de transporte y trámites en Cuba (combustión, con chapa, factura, mototaxi, volteo, plegable)",
+    "Soporte automático para pares 72 45 / 48 20 y cilindradas 125/150/250/300cc con sugerencias contextuales"
   ]
 }
