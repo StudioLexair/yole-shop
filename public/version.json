@@ -1,13 +1,13 @@
 {
-  "version": "1.5.1",
+  "version": "1.6.0",
   "buildId": "local",
-  "releasedAt": "2026-11-16T22:05:00Z",
+  "releasedAt": "2026-11-16T22:45:00Z",
   "mandatory": false,
-  "title": "Buscador Inteligente Pro para Vehículos y Motores",
-  "description": "Búsqueda especializada en motos de gasolina/eléctricas, unidades Lifan/Fonts/AX 100, remotorización, chapa, mototaxis, triciclos y pares de voltaje/amperaje.",
+  "title": "Suite Yole Pro · Asistente IA, Calc. Solar, Comparador y PDF",
+  "description": "Nuevo Asistente Yole Pro unificado con comparador móvil, calculadora solar de electrodomésticos, constructor de kits, cotizaciones PDF, envíos por provincia, modo gestor, estados 9:16 y multi-moneda en vivo.",
   "features": [
-    "Reconocimiento inteligente de motores y unidades (motor 250, ax100, remotorizar, diferencial/eje)",
-    "Búsqueda por jerga de transporte y trámites en Cuba (combustión, con chapa, factura, mototaxi, volteo, plegable)",
-    "Soporte automático para pares 72 45 / 48 20 y cilindradas 125/150/250/300cc con sugerencias contextuales"
+    "Asistente Yole Pro (Chat IA, Calculadora Solar, Comparador móvil-first y Arma tu Kit)",
+    "Cotizaciones formales en PDF real + Estados WhatsApp 9:16 + Modo Gestor/Revendedor (?ref=)",
+    "Filtros rápidos por departamento, ficha técnica automática, envíos por zona y sinónimos en 1 clic"
   ]
 }

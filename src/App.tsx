@@ -7,6 +7,7 @@ import {
   Menu,
   MessageCircle,
   Package,
+  Scale,
   Search,
   ShoppingBag,
   SlidersHorizontal,
@@ -22,6 +23,7 @@ import type {
   Department,
   PricePreset,
   Product,
+  ResellerConfig,
   StoreSettings,
 } from './types';
 import { DEFAULT_SETTINGS, DEPARTMENT_LABELS } from './types';
@@ -56,6 +58,13 @@ import { FloatingCartButton } from './components/FloatingCartButton';
 import { SmartImage } from './components/SmartImage';
 import { ContentGuard } from './components/ContentGuard';
 import { FlashDropBanner } from './components/FlashDropBanner';
+import { QuickDeptFilters } from './components/QuickDeptFilters';
+import type { AssistantTabKey } from './components/AssistantModal';
+import {
+  captureReferralFromUrl,
+  readResellerConfig,
+  saveResellerConfig,
+} from './lib/commerceTools';
 import { checkAppUpdate, type EvaluatedUpdateState } from './lib/versionManager';
 import {
   buildSearchLexicon,
@@ -92,6 +101,9 @@ const OrderTrackerModal = lazy(() =>
 );
 const UpdateModal = lazy(() =>
   import('./components/UpdateModal').then((m) => ({ default: m.UpdateModal }))
+);
+const AssistantModal = lazy(() =>
+  import('./components/AssistantModal').then((m) => ({ default: m.AssistantModal }))
 );
 
 const CART_STORAGE_KEY = 'yole_shop_cart_v1';
@@ -163,6 +175,31 @@ export function App() {
   const [trackerMounted, setTrackerMounted] = useState(false);
   const [trackerCode, setTrackerCode] = useState('');
   const [activeCoupon, setActiveCoupon] = useState<Coupon | null>(null);
+  const [reseller, setReseller] = useState<ResellerConfig>(() => readResellerConfig());
+  const [referralCode, setReferralCode] = useState<string>(() => captureReferralFromUrl());
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMounted, setAssistantMounted] = useState(false);
+  const [assistantTab, setAssistantTab] = useState<AssistantTabKey>('chat');
+
+  const openAssistant = useCallback((tab: AssistantTabKey = 'chat') => {
+    setAssistantTab(tab);
+    setAssistantMounted(true);
+    setAssistantOpen(true);
+  }, []);
+
+  const toggleCompareId = useCallback((productId: string) => {
+    setCompareIds((prev) => {
+      if (prev.includes(productId)) return prev.filter((id) => id !== productId);
+      if (prev.length >= 3) return [...prev.slice(1), productId];
+      return [...prev, productId];
+    });
+  }, []);
+
+  const handleUpdateReseller = useCallback((nextCfg: ResellerConfig) => {
+    setReseller(nextCfg);
+    saveResellerConfig(nextCfg);
+  }, []);
 
   useEffect(() => {
     if (cartOpen) setCartMounted(true);
@@ -713,6 +750,24 @@ export function App() {
     setVisibleLimit(PAGE_STEP);
   }, []);
 
+  useEffect(() => {
+    const refParam = captureReferralFromUrl();
+    if (refParam) setReferralCode(refParam);
+  }, []);
+
+  const availableFootwearSizes = useMemo(
+    () =>
+      collectAvailableSizes(
+        products.filter(
+          (p) =>
+            p.status === 'active' &&
+            p.department === 'calzado' &&
+            p.category_id !== 'zuecos-sandalias'
+        )
+      ),
+    [products]
+  );
+
   const visibleProducts = useMemo(
     () => filteredProducts.slice(0, visibleLimit),
     [filteredProducts, visibleLimit]
@@ -985,6 +1040,14 @@ export function App() {
             <div className="hero-headline-actions">
               <button
                 type="button"
+                className="btn btn--primary btn--sm"
+                onClick={() => openAssistant('chat')}
+              >
+                <Sparkles size={15} />
+                <span>Asistente IA</span>
+              </button>
+              <button
+                type="button"
                 className="btn btn--outline-dark btn--sm"
                 onClick={() => setTrackerOpen(true)}
               >
@@ -1139,6 +1202,22 @@ export function App() {
             </span>
             <button type="button" className="btn-link" onClick={() => setCartOpen(true)}>
               Usar en carrito
+            </button>
+          </div>
+        )}
+
+        {reseller.enabled && (
+          <div className="vip-active-banner" role="status">
+            <span>
+              Modo Gestor activo ({reseller.gestorName || 'Revendedor'} · +
+              {reseller.mode === 'pct' ? `${reseller.value}%` : `$${reseller.value} USD`})
+            </span>
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => handleUpdateReseller({ ...reseller, enabled: false })}
+            >
+              Desactivar
             </button>
           </div>
         )}
@@ -1396,6 +1475,27 @@ export function App() {
             )}
           </button>
         </div>
+
+        <QuickDeptFilters
+          department={department}
+          activeCategoryId={categoryId}
+          activeSize={sizeFilter}
+          activeSearch={search}
+          availableFootwearSizes={availableFootwearSizes}
+          onSelectCategory={(id) => {
+            setCategoryId(id);
+            setVisibleLimit(PAGE_STEP);
+          }}
+          onSelectSize={(sz) => {
+            setSizeFilter(sz);
+            setVisibleLimit(PAGE_STEP);
+          }}
+          onApplyQuickQuery={(q) => {
+            setSearch(q);
+            setVisibleLimit(PAGE_STEP);
+          }}
+          onOpenAssistant={(t) => openAssistant(t || 'chat')}
+        />
 
         {/* Typo correction & relaxed fallback banners */}
         {!searchFocused && parsedSearch?.didYouMean && (
@@ -1820,8 +1920,11 @@ export function App() {
                   product={product}
                   displayCurrency={displayCurrency}
                   settings={settings}
+                  reseller={reseller}
                   isFavorite={favoriteSet.has(product.sku)}
+                  isCompared={compareIds.includes(product.id)}
                   onToggleFavorite={toggleFavoriteSku}
+                  onToggleCompare={toggleCompareId}
                   onSelect={openProductModal}
                   onQuickAdd={handleAddToCart}
                 />
@@ -1906,17 +2009,47 @@ export function App() {
         </button>
       )}
 
+      {compareIds.length > 0 && (
+        <div className="compare-float-pill" role="region" aria-label="Comparador activo">
+          <button
+            type="button"
+            className="compare-float-pill__open"
+            onClick={() => openAssistant('compare')}
+          >
+            <Scale size={15} />
+            <span>Comparar ({compareIds.length}/3)</span>
+          </button>
+          <button
+            type="button"
+            className="compare-float-pill__clear"
+            aria-label="Vaciar comparador"
+            onClick={() => setCompareIds([])}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {selectedProduct && (
         <Suspense fallback={null}>
           <ProductModal
             key={selectedProduct.id}
             product={selectedProduct}
+            allProducts={products}
+            recentProducts={recentProducts}
             displayCurrency={displayCurrency}
             settings={settings}
+            reseller={reseller}
             isFavorite={favoriteSet.has(selectedProduct.sku)}
             onToggleFavorite={toggleFavoriteSku}
             onClose={closeProductModal}
             onAddToCart={handleAddToCart}
+            onSelectProduct={(p) => openProductModal(p)}
+            onCompareProduct={(p) => {
+              if (!compareIds.includes(p.id)) toggleCompareId(p.id);
+              closeProductModal();
+              openAssistant('compare');
+            }}
             onWhatsAppClick={(prod) =>
               trackStoreEvent({
                 event_type: 'whatsapp_click',
@@ -1933,10 +2066,14 @@ export function App() {
           <CartDrawer
             open={cartOpen}
             items={cart}
+            allProducts={products}
             displayCurrency={displayCurrency}
             settings={settings}
+            reseller={reseller}
+            referralCode={referralCode}
             activeCoupon={activeCoupon}
             onApplyCoupon={setActiveCoupon}
+            onQuickAddProduct={handleAddToCart}
             onOpenTracker={(code) => {
               setTrackerCode(code);
               setTrackerOpen(true);
@@ -2034,10 +2171,36 @@ export function App() {
             onSelectSheinGender={handleSelectSheinGender}
             onChangeCurrency={handleChangeCurrency}
             onOpenTracker={() => setTrackerOpen(true)}
+            onOpenAssistant={(t) => openAssistant(t || 'chat')}
+            reseller={reseller}
+            onUpdateReseller={handleUpdateReseller}
             directWaUrl={directWaUrl}
             canPromptInstall={Boolean(installPrompt)}
             isInstalled={isInstalled}
             onInstallApp={handleInstallApp}
+          />
+        </Suspense>
+      )}
+
+      {assistantMounted && (
+        <Suspense fallback={null}>
+          <AssistantModal
+            open={assistantOpen}
+            initialTab={assistantTab}
+            products={products}
+            categories={categories}
+            settings={settings}
+            displayCurrency={displayCurrency}
+            reseller={reseller}
+            compareIds={compareIds}
+            onToggleCompare={toggleCompareId}
+            onClearCompare={() => setCompareIds([])}
+            onOpenProduct={(p) => {
+              setAssistantOpen(false);
+              openProductModal(p);
+            }}
+            onAddToCart={handleAddToCart}
+            onClose={() => setAssistantOpen(false)}
           />
         </Suspense>
       )}

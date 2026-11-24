@@ -3,7 +3,43 @@ export type Currency = 'CUP' | 'USD';
 export type ProductStatus = 'active' | 'sold_out' | 'hidden';
 export type DeliveryType = 'domicilio' | 'recogida';
 export type PaymentMethod = 'efectivo' | 'transferencia' | 'usd';
+export type PaymentChannelKey = 'efectivo_usd' | 'zelle' | 'usdt' | 'mlc' | 'eur' | 'cup';
 export type OrderStatus = 'nuevo' | 'confirmado' | 'en_reparto' | 'entregado' | 'cancelado';
+
+export interface PaymentChannelConfig {
+  label: string;
+  mode: 'pct' | 'rate';
+  value: number;
+}
+
+export type PaymentRatesMap = Record<PaymentChannelKey, PaymentChannelConfig>;
+export type CustomSynonymsMap = Record<string, string[]>;
+
+export const DEFAULT_PAYMENT_RATES: PaymentRatesMap = {
+  efectivo_usd: { label: 'Efectivo USD', mode: 'pct', value: 0 },
+  zelle: { label: 'Zelle', mode: 'pct', value: 2 },
+  usdt: { label: 'USDT / Cripto', mode: 'pct', value: 1 },
+  mlc: { label: 'MLC', mode: 'pct', value: 15 },
+  eur: { label: 'EUR (Euros)', mode: 'rate', value: 0.92 },
+  cup: { label: 'CUP Efectivo', mode: 'rate', value: 980 },
+};
+
+export interface ResellerConfig {
+  enabled: boolean;
+  mode: 'usd' | 'pct';
+  value: number;
+  gestorName: string;
+  hideYoleSku: boolean;
+}
+
+export interface AlertSubscriber {
+  id: string;
+  contact: string;
+  topics: string[];
+  department: string;
+  push_supported: boolean;
+  created_at: string;
+}
 
 export interface StoreSettings {
   id: string;
@@ -27,6 +63,8 @@ export interface StoreSettings {
   flash_title?: string;
   flash_subtitle?: string;
   flash_ends_at?: string | null;
+  custom_synonyms?: CustomSynonymsMap;
+  payment_rates?: PaymentRatesMap;
   updated_at?: string;
 }
 
@@ -109,6 +147,9 @@ export interface Order {
   discount_usd?: number;
   has_unpriced_items: boolean;
   notes: string;
+  referral_code?: string;
+  payment_channel?: string;
+  shipping_zone?: string;
   status: OrderStatus;
   created_at: string;
   updated_at?: string;

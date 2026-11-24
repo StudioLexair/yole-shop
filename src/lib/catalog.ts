@@ -1,11 +1,14 @@
 import type {
+  AlertSubscriber,
   Category,
   Coupon,
   CouponValidationResult,
+  CustomSynonymsMap,
   Currency,
   Department,
   Order,
   OrderStatus,
+  PaymentRatesMap,
   PricePreset,
   Product,
   ProductStatus,
@@ -14,7 +17,7 @@ import type {
   SizeRequestStatus,
   StoreSettings,
 } from '../types';
-import { DEFAULT_SETTINGS } from '../types';
+import { DEFAULT_PAYMENT_RATES, DEFAULT_SETTINGS } from '../types';
 import { STORAGE_BUCKET, SUPABASE_URL, supabase } from './supabase';
 import { priceInCup, priceInUsd } from './pricing';
 import {
@@ -22,6 +25,7 @@ import {
   matchRelaxedSmartProduct,
   matchSmartProduct,
   parseSmartQuery,
+  setRuntimeCustomSynonyms,
   type SearchLexicon,
 } from './smartSearch';
 
@@ -290,8 +294,18 @@ export async function fetchStoreData(): Promise<{
         flash_subtitle: String(rawSettings.flash_subtitle || DEFAULT_SETTINGS.flash_subtitle || ''),
         flash_ends_at:
           typeof rawSettings.flash_ends_at === 'string' ? rawSettings.flash_ends_at : null,
+        custom_synonyms:
+          rawSettings.custom_synonyms && typeof rawSettings.custom_synonyms === 'object'
+            ? (rawSettings.custom_synonyms as CustomSynonymsMap)
+            : {},
+        payment_rates:
+          rawSettings.payment_rates && typeof rawSettings.payment_rates === 'object'
+            ? { ...DEFAULT_PAYMENT_RATES, ...(rawSettings.payment_rates as PaymentRatesMap) }
+            : DEFAULT_PAYMENT_RATES,
       }
-    : DEFAULT_SETTINGS;
+    : { ...DEFAULT_SETTINGS, custom_synonyms: {}, payment_rates: DEFAULT_PAYMENT_RATES };
+
+  setRuntimeCustomSynonyms(settings.custom_synonyms);
 
   const products: Product[] = (productsRes.data || []).map((row) => ({
     ...row,
@@ -460,6 +474,7 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<StoreS
     .from('store_settings')
     .upsert({ ...settings, id: 'default' }, { onConflict: 'id' });
   if (error) throw error;
+  setRuntimeCustomSynonyms(settings.custom_synonyms);
   return settings;
 }
 
@@ -607,6 +622,32 @@ export async function saveCoupon(
 export async function deleteCoupon(id: string): Promise<void> {
   const { error } = await supabase.from('coupons').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function subscribeStoreAlerts(payload: {
+  contact: string;
+  topics: string[];
+  department: string;
+  pushSupported: boolean;
+}): Promise<void> {
+  const { error } = await supabase.from('alert_subscribers').insert({
+    contact: payload.contact.trim(),
+    topics: payload.topics,
+    department: payload.department || 'all',
+    push_supported: payload.pushSupported,
+    user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 180) : '',
+  });
+  if (error) throw error;
+}
+
+export async function fetchAlertSubscribers(): Promise<AlertSubscriber[]> {
+  const { data, error } = await supabase
+    .from('alert_subscribers')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data || []) as AlertSubscriber[];
 }
 
 const FAVORITES_KEY = 'yole_shop_favorites_v1';

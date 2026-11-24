@@ -1,16 +1,21 @@
 import { useRef, useState } from 'react';
-import { Eye, Film, Heart, Images, MessageCircle, ShoppingBag } from 'lucide-react';
-import type { Currency, Product, StoreSettings } from '../types';
-import { buildWhatsAppProductLink, getDisplayPrice, isSheinProduct } from '../lib/pricing';
+import { Eye, Film, Heart, Images, MessageCircle, Scale, ShoppingBag } from 'lucide-react';
+import type { Currency, Product, ResellerConfig, StoreSettings } from '../types';
+import { buildWhatsAppProductLink, isSheinProduct } from '../lib/pricing';
 import { getAvailableSizes } from '../lib/catalog';
+import { getClientFacingPrice } from '../lib/commerceTools';
+import { extractProductSpecs } from '../lib/specExtractor';
 import { SmartImage } from './SmartImage';
 
 interface ProductCardProps {
   product: Product;
   displayCurrency: Currency;
   settings: StoreSettings;
+  reseller?: ResellerConfig;
   isFavorite?: boolean;
+  isCompared?: boolean;
   onToggleFavorite?: (sku: string) => void;
+  onToggleCompare?: (productId: string) => void;
   onSelect: (product: Product) => void;
   onQuickAdd: (product: Product, size: string) => void;
 }
@@ -19,12 +24,27 @@ export function ProductCard({
   product,
   displayCurrency,
   settings,
+  reseller,
   isFavorite = false,
+  isCompared = false,
   onToggleFavorite,
+  onToggleCompare,
   onSelect,
   onQuickAdd,
 }: ProductCardProps) {
-  const priceInfo = getDisplayPrice(product, displayCurrency, settings.usd_to_cup_rate);
+  const priceInfo = getClientFacingPrice(
+    product,
+    displayCurrency,
+    settings.usd_to_cup_rate,
+    reseller
+  );
+  const specPills =
+    product.department === 'movilidad' || product.department === 'solares'
+      ? extractProductSpecs(product).pills.slice(0, 3)
+      : [];
+  const canCompare =
+    Boolean(onToggleCompare) &&
+    (product.department === 'movilidad' || product.department === 'solares');
   const soldOutSet = new Set(product.sold_out_sizes || []);
   const availableSizes = getAvailableSizes(product);
   const defaultSize = availableSizes[0] || product.sizes[0] || 'Única';
@@ -147,6 +167,21 @@ export function ProductCard({
           </button>
         )}
 
+        {canCompare && (
+          <button
+            type="button"
+            className={`p-card__compare${isCompared ? ' is-compared' : ''}`}
+            aria-label={isCompared ? `Quitar ${product.title} de comparativa` : `Comparar ${product.title}`}
+            title={isCompared ? 'En comparativa' : 'Comparar modelo'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCompare?.(product.id);
+            }}
+          >
+            <Scale size={14} />
+          </button>
+        )}
+
         <button
           type="button"
           className="p-card__zoom"
@@ -163,12 +198,24 @@ export function ProductCard({
       <div className="p-card__body">
         <div className="p-card__meta-line">
           <span className="p-card__brand">{product.brand}</span>
-          <span className="p-card__sku">{product.sku}</span>
+          {!(reseller?.enabled && reseller.hideYoleSku) && (
+            <span className="p-card__sku">{product.sku}</span>
+          )}
         </div>
 
         <h3 className="p-card__title" onClick={() => onSelect(product)}>
           {product.title}
         </h3>
+
+        {specPills.length > 0 && (
+          <div className="p-card__specs" aria-label="Especificaciones clave">
+            {specPills.map((sp) => (
+              <span key={sp.id} className={`spec-pill spec-pill--${sp.tone}`}>
+                {sp.label}
+              </span>
+            ))}
+          </div>
+        )}
 
         {product.sizes.length > 0 && (
           <div className="p-card__sizes" aria-label="Tallas disponibles">
@@ -196,11 +243,11 @@ export function ProductCard({
 
         <div className="p-card__footer">
           <div className="p-card__price-wrap">
-            <strong className={`p-card__price${priceInfo.isConsult ? ' is-consult' : ''}`}>
-              {priceInfo.primary}
+            <strong className={`p-card__price${priceInfo.amount === null ? ' is-consult' : ''}`}>
+              {priceInfo.formatted}
             </strong>
-            {priceInfo.secondary && (
-              <span className="p-card__subprice">{priceInfo.secondary}</span>
+            {priceInfo.secondaryFormatted && (
+              <span className="p-card__subprice">{priceInfo.secondaryFormatted}</span>
             )}
           </div>
 

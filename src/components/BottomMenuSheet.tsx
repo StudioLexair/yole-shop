@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import {
+  BellRing,
+  Briefcase,
   Check,
   ChevronRight,
+  Copy,
   Download,
   Heart,
   MapPin,
@@ -9,12 +12,21 @@ import {
   Moon,
   Package,
   Smartphone,
+  Sparkles,
   Sun,
   Truck,
   X,
 } from 'lucide-react';
-import type { Currency, Department, StoreSettings } from '../types';
+import type { Currency, Department, ResellerConfig, StoreSettings } from '../types';
 import type { SheinSubFilter, ThemeMode } from '../lib/catalog';
+import { subscribeStoreAlerts } from '../lib/catalog';
+import {
+  buildReferralShareUrl,
+  DEFAULT_RESELLER_CONFIG,
+  markAlertSubscribedLocal,
+  readAlertSubscribed,
+  triggerBrowserDropNotification,
+} from '../lib/commerceTools';
 import { formatCup } from '../lib/pricing';
 
 interface BottomMenuSheetProps {
@@ -44,6 +56,9 @@ interface BottomMenuSheetProps {
   onSelectSheinGender: (g: SheinSubFilter) => void;
   onChangeCurrency: (c: Currency) => void;
   onOpenTracker: () => void;
+  onOpenAssistant?: (tab?: 'chat' | 'solar' | 'compare' | 'kit') => void;
+  reseller?: ResellerConfig;
+  onUpdateReseller?: (cfg: ResellerConfig) => void;
   directWaUrl: string;
   canPromptInstall: boolean;
   isInstalled: boolean;
@@ -67,12 +82,52 @@ export function BottomMenuSheet({
   onSelectSheinGender,
   onChangeCurrency,
   onOpenTracker,
+  onOpenAssistant,
+  reseller = DEFAULT_RESELLER_CONFIG,
+  onUpdateReseller,
   directWaUrl,
   canPromptInstall,
   isInstalled,
   onInstallApp,
 }: BottomMenuSheetProps) {
   const [showManualInstall, setShowManualInstall] = useState(false);
+  const [resellerOpen, setResellerOpen] = useState(reseller.enabled);
+  const [copiedRef, setCopiedRef] = useState(false);
+  const [alertSubscribed, setAlertSubscribed] = useState(() => readAlertSubscribed());
+  const [alertContact, setAlertContact] = useState('');
+  const [alertSaving, setAlertSaving] = useState(false);
+
+  const handleEnableAlerts = async () => {
+    if (alertSaving) return;
+    setAlertSaving(true);
+    try {
+      let pushGranted = false;
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          pushGranted = true;
+        } else if (Notification.permission !== 'denied') {
+          const perm = await Notification.requestPermission();
+          pushGranted = perm === 'granted';
+        }
+      }
+      await subscribeStoreAlerts({
+        contact: alertContact || 'web-push',
+        topics: ['drops', 'ofertas'],
+        department: department === 'all' ? 'all' : department,
+        pushSupported: pushGranted,
+      }).catch(() => undefined);
+      markAlertSubscribedLocal();
+      setAlertSubscribed(true);
+      if (pushGranted) {
+        await triggerBrowserDropNotification(
+          'Yole Shop · Alertas Activadas',
+          'Te avisaremos cuando entren nuevos drops y rebajas en la tienda.'
+        );
+      }
+    } finally {
+      setAlertSaving(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -321,8 +376,22 @@ export function BottomMenuSheet({
             )}
           </div>
 
-          {/* Seguir pedido QR */}
+          {/* Asistente Yole Pro & Seguir pedido QR */}
           <div className="sheet-section">
+            {onOpenAssistant && (
+              <button
+                type="button"
+                className="btn btn--primary btn--block"
+                style={{ marginBottom: 8 }}
+                onClick={() => {
+                  onClose();
+                  onOpenAssistant('chat');
+                }}
+              >
+                <Sparkles size={17} />
+                <span>Asistente Yole Pro · Calc. Solar · Comparar</span>
+              </button>
+            )}
             <button
               type="button"
               className="btn btn--outline-dark btn--block"
@@ -335,6 +404,140 @@ export function BottomMenuSheet({
               <span>Seguir mi pedido (QR / Código)</span>
             </button>
           </div>
+
+          {/* Alertas PWA / Notificaciones de Drops */}
+          <div className="sheet-section">
+            <span className="sheet-label">Alertas de Drops y Rebajas (PWA)</span>
+            {alertSubscribed ? (
+              <div className="sheet-install-done">
+                <BellRing size={16} />
+                <span>Alertas activadas en este dispositivo</span>
+              </div>
+            ) : (
+              <div className="sheet-alert-box">
+                <input
+                  type="text"
+                  placeholder="Tu WhatsApp opcional (para avisarte si hay drop)"
+                  value={alertContact}
+                  onChange={(e) => setAlertContact(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn btn--outline-dark btn--block"
+                  disabled={alertSaving}
+                  onClick={() => void handleEnableAlerts()}
+                >
+                  <BellRing size={16} />
+                  <span>
+                    {alertSaving ? 'Activando...' : 'Avísame cuando entren drops o baje de precio'}
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Modo Revendedor / Gestor con Margen Propio */}
+          {onUpdateReseller && (
+            <div className="sheet-section">
+              <button
+                type="button"
+                className={`sheet-nav-item${reseller.enabled ? ' is-active' : ''}`}
+                onClick={() => setResellerOpen((v) => !v)}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  <Briefcase size={15} />
+                  Modo Gestor / Revendedor
+                </span>
+                <span className="sheet-nav-right">
+                  <strong>{reseller.enabled ? 'Activo' : 'Off'}</strong>
+                  <ChevronRight size={16} />
+                </span>
+              </button>
+
+              {resellerOpen && (
+                <div className="sheet-reseller-box">
+                  <label className="sheet-check-row">
+                    <input
+                      type="checkbox"
+                      checked={reseller.enabled}
+                      onChange={(e) =>
+                        onUpdateReseller({ ...reseller, enabled: e.target.checked })
+                      }
+                    />
+                    <span>Mostrar precios con mi ganancia sumada</span>
+                  </label>
+
+                  <div className="sheet-reseller-grid">
+                    <select
+                      value={reseller.mode}
+                      onChange={(e) =>
+                        onUpdateReseller({
+                          ...reseller,
+                          mode: e.target.value === 'pct' ? 'pct' : 'usd',
+                        })
+                      }
+                    >
+                      <option value="usd">+ $ USD fijo</option>
+                      <option value="pct">+ % porcentaje</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={reseller.value}
+                      onChange={(e) =>
+                        onUpdateReseller({
+                          ...reseller,
+                          value: Math.max(0, Number(e.target.value) || 0),
+                        })
+                      }
+                      placeholder="Margen"
+                    />
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Tu nombre / alias de gestor (ej. CARLOS)"
+                    value={reseller.gestorName}
+                    onChange={(e) =>
+                      onUpdateReseller({ ...reseller, gestorName: e.target.value })
+                    }
+                  />
+
+                  <label className="sheet-check-row">
+                    <input
+                      type="checkbox"
+                      checked={reseller.hideYoleSku}
+                      onChange={(e) =>
+                        onUpdateReseller({ ...reseller, hideYoleSku: e.target.checked })
+                      }
+                    />
+                    <span>Ocultar códigos SKU internos al compartir</span>
+                  </label>
+
+                  {reseller.gestorName.trim() && (
+                    <button
+                      type="button"
+                      className="btn btn--outline-dark btn--sm"
+                      onClick={() => {
+                        const url = buildReferralShareUrl(reseller.gestorName);
+                        void navigator.clipboard?.writeText(url);
+                        setCopiedRef(true);
+                        setTimeout(() => setCopiedRef(false), 1800);
+                      }}
+                    >
+                      {copiedRef ? <Check size={14} /> : <Copy size={14} />}
+                      <span>
+                        {copiedRef
+                          ? 'Enlace de referido copiado'
+                          : `Copiar enlace ?ref=${reseller.gestorName.trim().toUpperCase()}`}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Instalar App nativa */}
           <div className="sheet-section">

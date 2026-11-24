@@ -1,5 +1,26 @@
-import type { Category, Department, Product } from '../types';
+import type { Category, CustomSynonymsMap, Department, Product } from '../types';
 import { priceInCup, priceInUsd } from './pricing';
+
+let runtimeCustomSynonyms: Record<string, string[]> = {};
+
+export function setRuntimeCustomSynonyms(map: CustomSynonymsMap | null | undefined): void {
+  const next: Record<string, string[]> = {};
+  if (map && typeof map === 'object') {
+    for (const [rawKey, targets] of Object.entries(map)) {
+      const nk = normalizeText(rawKey);
+      if (!nk || !Array.isArray(targets)) continue;
+      const cleanTargets = targets.map((t) => normalizeText(String(t))).filter(Boolean);
+      if (cleanTargets.length > 0) {
+        next[nk] = cleanTargets;
+      }
+    }
+  }
+  runtimeCustomSynonyms = next;
+}
+
+export function getRuntimeCustomSynonyms(): Record<string, string[]> {
+  return runtimeCustomSynonyms;
+}
 
 export interface SearchLexicon {
   brands: string[];
@@ -965,6 +986,11 @@ function tokenMatchesHaystack(token: string, hay: string, dept: Department): boo
     return true;
   }
   if (token.length >= 5 && token.endsWith('es') && hayContainsTerm(hay, token.slice(0, -2))) {
+    return true;
+  }
+
+  const customSyns = runtimeCustomSynonyms[token] || runtimeCustomSynonyms[canonical];
+  if (customSyns && customSyns.some((s) => hayContainsTerm(hay, s))) {
     return true;
   }
 

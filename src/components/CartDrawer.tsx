@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   Copy,
+  FileDown,
   MessageCircle,
   Minus,
   Package,
@@ -16,7 +17,10 @@ import type {
   Coupon,
   Currency,
   DeliveryType,
+  PaymentChannelKey,
   PaymentMethod,
+  Product,
+  ResellerConfig,
   StoreSettings,
 } from '../types';
 import {
@@ -25,7 +29,6 @@ import {
   cartTransferBlockReason,
   formatCup,
   formatUsd,
-  getDisplayPrice,
   isCupLockedFootwear,
   summarizeCart,
 } from '../lib/pricing';
@@ -37,17 +40,30 @@ import {
   validateCouponCode,
   writeCustomerProfile,
 } from '../lib/catalog';
+import { getCrossSellSuggestions } from '../lib/assistantEngine';
+import {
+  calculateShippingEstimate,
+  downloadFormalQuotePdf,
+  formatChannelTotal,
+  getClientFacingPrice,
+  PAYMENT_CHANNEL_ORDER,
+  SHIPPING_ZONES,
+} from '../lib/commerceTools';
 import { QrCodeSvg } from './QrCodeSvg';
 import { SmartImage } from './SmartImage';
 
 interface CartDrawerProps {
   open: boolean;
   items: CartItem[];
+  allProducts?: Product[];
   displayCurrency?: Currency;
   settings: StoreSettings;
+  reseller?: ResellerConfig;
+  referralCode?: string;
   activeCoupon?: Coupon | null;
   onApplyCoupon?: (coupon: Coupon | null) => void;
   onOpenTracker?: (code: string) => void;
+  onQuickAddProduct?: (product: Product, size: string) => void;
   onClose: () => void;
   onUpdateQty: (sku: string, size: string, delta: number) => void;
   onRemove: (sku: string, size: string) => void;
@@ -57,11 +73,15 @@ interface CartDrawerProps {
 export function CartDrawer({
   open,
   items,
+  allProducts = [],
   displayCurrency = 'USD',
   settings,
+  reseller,
+  referralCode = '',
   activeCoupon = null,
   onApplyCoupon,
   onOpenTracker,
+  onQuickAddProduct,
   onClose,
   onUpdateQty,
   onRemove,
@@ -86,6 +106,22 @@ export function CartDrawer({
   const [errorMsg, setErrorMsg] = useState('');
   const [sentCode, setSentCode] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [shippingZoneId, setShippingZoneId] = useState('santa-clara');
+  const [paymentChannel, setPaymentChannel] = useState<PaymentChannelKey>('efectivo_usd');
+  const [quoteBusy, setQuoteBusy] = useState(false);
+
+  const shippingEst = useMemo(
+    () => calculateShippingEstimate(shippingZoneId, items, deliveryType),
+    [shippingZoneId, items, deliveryType]
+  );
+
+  const crossSellPool = useMemo(() => {
+    if (items.length === 0 || allProducts.length === 0) return [];
+    const inCartSkus = new Set(items.map((it) => it.product.sku));
+    return getCrossSellSuggestions(items[0].product, allProducts)
+      .filter((p) => !inCartSkus.has(p.sku))
+      .slice(0, 3);
+  }, [items, allProducts]);
 
   const transferBlocked = cartHasTransferBlockedItems(items);
   const transferBlockMsg = cartTransferBlockReason(items);
@@ -170,6 +206,13 @@ export function CartDrawer({
 
     const orderCode = `YOL-ORD-${Math.floor(1000 + Math.random() * 9000)}`;
     const appliedCode = summary.discountCup > 0 && activeCoupon ? activeCoupon.code : '';
+    const extraMetaParts = [
+      `Canal: ${channelTotal.channelLabel} (${channelTotal.formatted})`,
+      `Zona: ${shippingEst.label}`,
+      referralCode ? `Ref: ${referralCode}` : '',
+    ].filter(Boolean);
+    const enrichedNotes = [notes.trim(), ...extraMetaParts].filter(Boolean).join(' · ');
+
     const waUrl = buildWhatsAppOrderLink({
       orderCode,
       customerName,
@@ -178,7 +221,7 @@ export function CartDrawer({
       deliveryAddress,
       paymentMethod: effectivePaymentMethod,
       deliveryTime,
-      notes,
+      notes: enrichedNotes,
       items,
       summary,
       discountCode: appliedCode || undefined,
@@ -187,7 +230,7 @@ export function CartDrawer({
 
     const savedNotes = [
       deliveryTime.trim() ? `Hora: ${deliveryTime.trim()}` : '',
-      notes.trim(),
+      enrichedNotes,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -218,6 +261,9 @@ export function CartDrawer({
         discount_usd: summary.discountUsd,
         has_unpriced_items: summary.hasUnpricedItems,
         notes: savedNotes,
+        referral_code: referralCode || '',
+        payment_channel: paymentChannel,
+        shipping_zone: shippingZoneId,
       });
       if (appliedCode) {
         await recordCouponUse(appliedCode);
@@ -243,6 +289,31 @@ export function CartDrawer({
   const deliveryFeeUsd = Math.round((summary.deliveryFeeCup / rate) * 100) / 100;
   const transferFeeUsd = Math.round((summary.transferFeeCup / rate) * 100) / 100;
   const totalUsdWithExtras = Math.round((summary.totalCupWithExtras / rate) * 100) / 100;
+  const totalUsdWithZone =
+    totalUsdWithExtras + (deliveryType === 'domicilio' && shippingEst.feeUsd ? shippingEst.feeUsd : 0);
+  const channelTotal = formatChannelTotal(totalUsdWithZone, paymentChannel, settings);
+
+  const handleDownloadCartPdf = async () => {
+    if (items.length === 0 || quoteBusy) return;
+    setQuoteBusy(true);
+    try {
+      await downloadFormalQuotePdf({
+        items: items.map((it) => ({
+          product: it.product,
+          size: it.size,
+          qty: it.qty,
+        })),
+        settings,
+        reseller,
+        shippingLabel: shippingEst.label,
+        shippingFeeUsd: deliveryType === 'domicilio' ? shippingEst.feeUsd : 0,
+        customerName: customerName.trim() || undefined,
+        referralCode: referralCode || undefined,
+      });
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
 
   return (
     <div
@@ -281,10 +352,11 @@ export function CartDrawer({
             <>
               <div className="cart-list">
                 {items.map((it) => {
-                  const pInfo = getDisplayPrice(
+                  const pInfo = getClientFacingPrice(
                     it.product,
                     displayCurrency,
-                    settings.usd_to_cup_rate
+                    settings.usd_to_cup_rate,
+                    reseller
                   );
                   return (
                     <div key={`${it.product.sku}-${it.size}`} className="cart-item">
@@ -299,7 +371,7 @@ export function CartDrawer({
                           {it.product.sku} · Talla {it.size}
                         </div>
                         <div className="cart-item__title">{it.product.title}</div>
-                        <div className="cart-item__price">{pInfo.primary}</div>
+                        <div className="cart-item__price">{pInfo.formatted}</div>
                         <div className="cart-item__controls">
                           <button
                             type="button"
@@ -330,6 +402,43 @@ export function CartDrawer({
                   );
                 })}
               </div>
+
+              {crossSellPool.length > 0 && onQuickAddProduct && (
+                <div className="cart-cross-sell">
+                  <span className="cart-cross-sell__head">Completa tu pedido</span>
+                  <div className="cart-cross-sell__list">
+                    {crossSellPool.map((p) => {
+                      const pr = getClientFacingPrice(
+                        p,
+                        displayCurrency,
+                        settings.usd_to_cup_rate,
+                        reseller
+                      );
+                      return (
+                        <div key={p.id} className="cart-cross-sell__row">
+                          <SmartImage
+                            src={p.image_url}
+                            alt={p.title}
+                            variant="compact"
+                            wrapperClassName="cart-cross-sell__img"
+                          />
+                          <div>
+                            <strong>{p.title}</strong>
+                            <small>{pr.formatted}</small>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-ghost-sm"
+                            onClick={() => onQuickAddProduct(p, p.sizes[0] || 'Única')}
+                          >
+                            + Sumar
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Cupón o enlace VIP */}
               <div className="coupon-box">
@@ -514,17 +623,61 @@ export function CartDrawer({
                 </div>
 
                 {deliveryType === 'domicilio' && (
-                  <label className="field">
-                    <span>Dirección / Reparto *</span>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Calle, entre calles y reparto"
-                      value={deliveryAddress}
-                      onChange={(e) => setDeliveryAddress(e.target.value)}
-                    />
-                  </label>
+                  <>
+                    <label className="field">
+                      <span>Zona / Municipio de entrega (Flete estimado)</span>
+                      <select
+                        value={shippingZoneId}
+                        onChange={(e) => setShippingZoneId(e.target.value)}
+                      >
+                        {SHIPPING_ZONES.map((z) => (
+                          <option key={z.id} value={z.id}>
+                            {z.label}
+                          </option>
+                        ))}
+                      </select>
+                      <small className="field-hint">{shippingEst.label}</small>
+                    </label>
+                    <label className="field">
+                      <span>Dirección / Reparto *</span>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Calle, entre calles y reparto"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                      />
+                    </label>
+                  </>
                 )}
+
+                <div className="field">
+                  <span>Moneda / Canal de pago en tiempo real</span>
+                  <div className="channel-pills">
+                    {PAYMENT_CHANNEL_ORDER.map((chKey) => {
+                      const info = formatChannelTotal(totalUsdWithZone, chKey, settings);
+                      return (
+                        <button
+                          key={chKey}
+                          type="button"
+                          className={`channel-pill ${paymentChannel === chKey ? 'is-active' : ''}`}
+                          onClick={() => {
+                            setPaymentChannel(chKey);
+                            if (chKey === 'cup') setPaymentMethod('efectivo');
+                            else setPaymentMethod('usd');
+                          }}
+                        >
+                          <span>{info.channelLabel}</span>
+                          <strong>{info.formatted}</strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <small className="field-hint">
+                    {channelTotal.channelLabel}: {channelTotal.formatted} ({channelTotal.note})
+                    {referralCode ? ` · Referido por ${referralCode}` : ''}
+                  </small>
+                </div>
 
                 <div className="field">
                   <span>Forma de pago</span>
@@ -633,28 +786,32 @@ export function CartDrawer({
             {summary.totalCupWithExtras > 0 && (
               <div className="drawer-footer__total">
                 <span>
-                  Total estimado (
-                  {summaryInUsd
-                    ? formatCup(summary.totalCupWithExtras)
-                    : formatUsd(totalUsdWithExtras)}
-                  )
+                  {channelTotal.channelLabel} ({channelTotal.note})
                 </span>
-                <strong>
-                  {summaryInUsd
-                    ? formatUsd(totalUsdWithExtras)
-                    : formatCup(summary.totalCupWithExtras)}
-                </strong>
+                <strong>{channelTotal.formatted}</strong>
               </div>
             )}
-            <button
-              type="submit"
-              form="yole-checkout-form"
-              className="btn btn--whatsapp btn--block drawer-footer__cta"
-              disabled={sending}
-            >
-              <MessageCircle size={18} />
-              <span>{sending ? 'Preparando pedido...' : 'Enviar pedido a WhatsApp'}</span>
-            </button>
+            <div className="drawer-footer__btn-row">
+              <button
+                type="button"
+                className="btn btn--outline-dark btn--sm"
+                disabled={quoteBusy}
+                onClick={() => void handleDownloadCartPdf()}
+                title="Descargar cotización formal en PDF"
+              >
+                <FileDown size={16} />
+                <span>{quoteBusy ? 'PDF...' : 'Cotizar PDF'}</span>
+              </button>
+              <button
+                type="submit"
+                form="yole-checkout-form"
+                className="btn btn--whatsapp btn--block drawer-footer__cta"
+                disabled={sending}
+              >
+                <MessageCircle size={18} />
+                <span>{sending ? 'Preparando pedido...' : 'Enviar pedido a WhatsApp'}</span>
+              </button>
+            </div>
           </footer>
         )}
       </aside>

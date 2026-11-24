@@ -1,51 +1,65 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BellRing,
   Check,
   ChevronLeft,
   ChevronRight,
   Download,
+  FileDown,
   Film,
   Heart,
   Maximize2,
   MessageCircle,
+  Scale,
   Share2,
   ShoppingBag,
   X,
 } from 'lucide-react';
-import type { Currency, Product, StoreSettings } from '../types';
+import type { Currency, Product, ResellerConfig, StoreSettings } from '../types';
 import {
   buildWhatsAppProductLink,
-  getDisplayPrice,
   isSheinProduct,
   isSolarProduct,
 } from '../lib/pricing';
 import { getAvailableSizes, submitSizeRequest } from '../lib/catalog';
+import { getCrossSellSuggestions, getSimilarProducts } from '../lib/assistantEngine';
+import { downloadFormalQuotePdf, getClientFacingPrice } from '../lib/commerceTools';
+import { extractProductSpecs } from '../lib/specExtractor';
 import { downloadRemoteImage, shareProductLink } from '../lib/mediaHelpers';
 import { SmartImage } from './SmartImage';
 
 interface ProductModalProps {
   product: Product;
+  allProducts?: Product[];
+  recentProducts?: Product[];
   displayCurrency: Currency;
   settings: StoreSettings;
+  reseller?: ResellerConfig;
   isFavorite?: boolean;
   onToggleFavorite?: (sku: string) => void;
   onClose: () => void;
   onAddToCart: (product: Product, size: string) => void;
   onWhatsAppClick?: (product: Product) => void;
+  onSelectProduct?: (product: Product) => void;
+  onCompareProduct?: (product: Product) => void;
 }
 
 type MediaSlide = { type: 'image' | 'video'; url: string };
 
 export function ProductModal({
   product,
+  allProducts = [],
+  recentProducts = [],
   displayCurrency,
   settings,
+  reseller,
   isFavorite = false,
   onToggleFavorite,
   onClose,
   onAddToCart,
   onWhatsAppClick,
+  onSelectProduct,
+  onCompareProduct,
 }: ProductModalProps) {
   const allSizes = product.sizes.length > 0 ? product.sizes : ['Única'];
   const soldOutSet = useMemo(
@@ -83,12 +97,54 @@ export function ProductModal({
   }, [product.image_url, product.extra_images, product.video_url]);
 
   const [photoIdx, setPhotoIdx] = useState(0);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+
+  useEffect(() => {
+    setPhotoIdx(0);
+    setSelectedSize(availableSizes[0] || allSizes[0] || 'Única');
+    setReqOpen(false);
+    setReqSent(false);
+  }, [product.id]);
+
   const activeSlide = mediaSlides[photoIdx] || { type: 'image' as const, url: product.image_url };
 
-  const priceInfo = getDisplayPrice(product, displayCurrency, settings.usd_to_cup_rate);
+  const priceInfo = getClientFacingPrice(
+    product,
+    displayCurrency,
+    settings.usd_to_cup_rate,
+    reseller
+  );
+  const extractedSpecs = useMemo(() => extractProductSpecs(product), [product]);
+  const crossSell = useMemo(
+    () => (allProducts.length > 0 ? getCrossSellSuggestions(product, allProducts) : []),
+    [product, allProducts]
+  );
+  const similarItems = useMemo(
+    () => (allProducts.length > 0 ? getSimilarProducts(product, allProducts) : []),
+    [product, allProducts]
+  );
+  const recentOthers = useMemo(
+    () => recentProducts.filter((p) => p.id !== product.id).slice(0, 6),
+    [recentProducts, product.id]
+  );
+
   const waUrl = buildWhatsAppProductLink(product, selectedSize, settings);
   const noSizesAvailable = product.sizes.length > 0 && availableSizes.length === 0;
   const isSoldOut = product.status === 'sold_out' || noSizesAvailable;
+
+  const handleDownloadQuote = async () => {
+    if (quoteBusy) return;
+    setQuoteBusy(true);
+    try {
+      await downloadFormalQuotePdf({
+        items: [{ product, size: selectedSize, qty: 1 }],
+        settings,
+        reseller,
+      });
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
 
   const handleAdd = () => {
     if (isSoldOut || soldOutSet.has(selectedSize)) return;
@@ -270,11 +326,25 @@ export function ProductModal({
               <h2 className="modal-title">{product.title}</h2>
 
               <div className="modal-price-box">
-                <strong className={`modal-price${priceInfo.isConsult ? ' is-consult' : ''}`}>
-                  {priceInfo.primary}
+                <strong className={`modal-price${priceInfo.amount === null ? ' is-consult' : ''}`}>
+                  {priceInfo.formatted}
                 </strong>
-                {priceInfo.secondary && <span className="modal-subprice">{priceInfo.secondary}</span>}
+                {priceInfo.secondaryFormatted && (
+                  <span className="modal-subprice">{priceInfo.secondaryFormatted}</span>
+                )}
               </div>
+
+              {(product.department === 'movilidad' || product.department === 'solares') &&
+                extractedSpecs.rows.length > 0 && (
+                  <div className="modal-spec-grid" aria-label="Ficha técnica estructurada">
+                    {extractedSpecs.rows.map((row) => (
+                      <div key={row.label} className="modal-spec-cell">
+                        <small>{row.label}</small>
+                        <strong>{row.value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               {(isSheinProduct(product) || isSolarProduct(product)) && (
                 <div className="shein-cash-only-note" role="note">
@@ -410,6 +480,26 @@ export function ProductModal({
                   <Download size={15} />
                   <span>{downloading ? 'Descargando...' : 'Descargar foto'}</span>
                 </button>
+                <button
+                  type="button"
+                  className="btn-util"
+                  onClick={handleDownloadQuote}
+                  disabled={quoteBusy}
+                >
+                  <FileDown size={15} />
+                  <span>{quoteBusy ? 'Generando...' : 'Cotización PDF'}</span>
+                </button>
+                {onCompareProduct &&
+                  (product.department === 'movilidad' || product.department === 'solares') && (
+                    <button
+                      type="button"
+                      className="btn-util"
+                      onClick={() => onCompareProduct(product)}
+                    >
+                      <Scale size={15} />
+                      <span>Comparar</span>
+                    </button>
+                  )}
               </div>
 
               <div className="modal-actions">
@@ -436,6 +526,95 @@ export function ProductModal({
               </div>
 
               <p className="modal-disclaimer">{settings.no_returns_notice}</p>
+
+              {(crossSell.length > 0 || similarItems.length > 0 || recentOthers.length > 0) &&
+                onSelectProduct && (
+                  <div className="modal-discovery-strips">
+                    {crossSell.length > 0 && (
+                      <div className="modal-mini-strip">
+                        <h4>Completa tu compra</h4>
+                        <div className="modal-mini-row">
+                          {crossSell.map((rel) => {
+                            const rp = getClientFacingPrice(
+                              rel,
+                              displayCurrency,
+                              settings.usd_to_cup_rate,
+                              reseller
+                            );
+                            return (
+                              <button
+                                key={rel.id}
+                                type="button"
+                                className="modal-mini-card"
+                                onClick={() => onSelectProduct(rel)}
+                              >
+                                <SmartImage src={rel.image_url} alt={rel.title} variant="compact" />
+                                <strong>{rel.title}</strong>
+                                <span>{rp.formatted}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {similarItems.length > 0 && (
+                      <div className="modal-mini-strip">
+                        <h4>{isSoldOut ? 'Alternativas con stock disponible' : 'Modelos similares'}</h4>
+                        <div className="modal-mini-row">
+                          {similarItems.map((rel) => {
+                            const rp = getClientFacingPrice(
+                              rel,
+                              displayCurrency,
+                              settings.usd_to_cup_rate,
+                              reseller
+                            );
+                            return (
+                              <button
+                                key={rel.id}
+                                type="button"
+                                className="modal-mini-card"
+                                onClick={() => onSelectProduct(rel)}
+                              >
+                                <SmartImage src={rel.image_url} alt={rel.title} variant="compact" />
+                                <strong>{rel.title}</strong>
+                                <span>{rp.formatted}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {recentOthers.length > 0 && (
+                      <div className="modal-mini-strip">
+                        <h4>Vistos recientemente</h4>
+                        <div className="modal-mini-row">
+                          {recentOthers.map((rel) => {
+                            const rp = getClientFacingPrice(
+                              rel,
+                              displayCurrency,
+                              settings.usd_to_cup_rate,
+                              reseller
+                            );
+                            return (
+                              <button
+                                key={rel.id}
+                                type="button"
+                                className="modal-mini-card"
+                                onClick={() => onSelectProduct(rel)}
+                              >
+                                <SmartImage src={rel.image_url} alt={rel.title} variant="compact" />
+                                <strong>{rel.title}</strong>
+                                <span>{rp.formatted}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
           </div>
         </div>
@@ -490,7 +669,8 @@ export function ProductModal({
             <div className="lightbox-caption">
               <strong>{product.title}</strong>
               <span>
-                {product.sku} · {priceInfo.primary}
+                {!(reseller?.enabled && reseller.hideYoleSku) ? `${product.sku} · ` : ''}
+                {priceInfo.formatted}
               </span>
             </div>
           </div>

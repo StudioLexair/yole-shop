@@ -78,6 +78,7 @@ import {
 import {
   AdminAnalyticsTab,
   AdminCouponsTab,
+  AdminMarketingTab,
   AdminRequestsTab,
 } from './AdminExtraTabs';
 import { AdminPhotoSyncTab } from './AdminPhotoSyncTab';
@@ -109,6 +110,7 @@ type AdminTab =
   | 'orders'
   | 'requests'
   | 'coupons'
+  | 'marketing'
   | 'analytics'
   | 'settings'
   | 'version'
@@ -1281,6 +1283,13 @@ export function AdminView({
           </button>
           <button
             type="button"
+            className={tab === 'marketing' ? 'is-active' : ''}
+            onClick={() => setTab('marketing')}
+          >
+            <ImageDown size={16} /> Estados 9:16
+          </button>
+          <button
+            type="button"
             className={tab === 'analytics' ? 'is-active' : ''}
             onClick={() => setTab('analytics')}
           >
@@ -2386,7 +2395,30 @@ export function AdminView({
 
         {tab === 'coupons' && <AdminCouponsTab onToast={showToast} />}
 
-        {tab === 'analytics' && <AdminAnalyticsTab onToast={showToast} />}
+        {tab === 'marketing' && (
+          <AdminMarketingTab
+            products={products}
+            settings={cfg}
+            onSaveSettings={async (next) => {
+              const saved = await saveStoreSettings(next);
+              setCfg(saved);
+              await onRefresh();
+            }}
+            onToast={showToast}
+          />
+        )}
+
+        {tab === 'analytics' && (
+          <AdminAnalyticsTab
+            settings={cfg}
+            onSaveSettings={async (next) => {
+              const saved = await saveStoreSettings(next);
+              setCfg(saved);
+              await onRefresh();
+            }}
+            onToast={showToast}
+          />
+        )}
 
         {tab === 'settings' && (
           <section className="admin-panel">

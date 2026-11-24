@@ -4,30 +4,45 @@ import {
   BellRing,
   Check,
   Copy,
+  Download,
+  Image as ImageIcon,
   MessageCircle,
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   Tag,
   Trash2,
 } from 'lucide-react';
 import type {
+  AlertSubscriber,
   Coupon,
   CouponDiscountType,
+  CustomSynonymsMap,
   Department,
+  PaymentChannelKey,
+  PaymentRatesMap,
+  Product,
   SizeRequest,
   SizeRequestStatus,
   StoreSettings,
 } from '../types';
-import { DEPARTMENT_LABELS } from '../types';
+import { DEFAULT_PAYMENT_RATES, DEPARTMENT_LABELS } from '../types';
 import {
   deleteCoupon,
   deleteSizeRequest,
+  fetchAlertSubscribers,
   fetchCoupons,
   fetchSizeRequests,
   saveCoupon,
   updateSizeRequestStatus,
 } from '../lib/catalog';
+import {
+  PAYMENT_CHANNEL_ORDER,
+  renderStatusStoryDataUrl,
+  triggerBrowserDropNotification,
+  type StoryThemeKey,
+} from '../lib/commerceTools';
 import {
   clearStoreAnalytics,
   fetchStoreAnalytics,
@@ -432,9 +447,19 @@ export function AdminCouponsTab({ onToast }: { onToast: (msg: string) => void })
   );
 }
 
-export function AdminAnalyticsTab({ onToast }: { onToast: (msg: string) => void }) {
+export function AdminAnalyticsTab({
+  settings,
+  onSaveSettings,
+  onToast,
+}: {
+  settings?: StoreSettings;
+  onSaveSettings?: (next: StoreSettings) => Promise<void>;
+  onToast: (msg: string) => void;
+}) {
   const [data, setData] = useState<StoreAnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [synonymTargets, setSynonymTargets] = useState<Record<string, string>>({});
+  const [savingSyn, setSavingSyn] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -450,6 +475,40 @@ export function AdminAnalyticsTab({ onToast }: { onToast: (msg: string) => void 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleSaveSynonym = async (missedQuery: string, targetRaw: string) => {
+    if (!settings || !onSaveSettings) return;
+    const cleanKey = missedQuery.trim().toLowerCase();
+    const targets = targetRaw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    if (!cleanKey || targets.length === 0) {
+      onToast('Escribe una o más palabras reales del catálogo separadas por coma.');
+      return;
+    }
+    setSavingSyn(true);
+    try {
+      const nextSyn: CustomSynonymsMap = {
+        ...(settings.custom_synonyms || {}),
+        [cleanKey]: targets,
+      };
+      await onSaveSettings({ ...settings, custom_synonyms: nextSyn });
+      onToast(`Sinónimo guardado: "${cleanKey}" → ${targets.join(', ')}`);
+    } catch {
+      onToast('Error guardando sinónimo');
+    } finally {
+      setSavingSyn(false);
+    }
+  };
+
+  const handleRemoveSynonym = async (key: string) => {
+    if (!settings || !onSaveSettings) return;
+    const nextSyn: CustomSynonymsMap = { ...(settings.custom_synonyms || {}) };
+    delete nextSyn[key];
+    await onSaveSettings({ ...settings, custom_synonyms: nextSyn });
+    onToast(`Sinónimo "${key}" eliminado`);
+  };
 
   const handleClear = async () => {
     if (!window.confirm('¿Reiniciar contadores de analítica?')) return;
@@ -468,7 +527,7 @@ export function AdminAnalyticsTab({ onToast }: { onToast: (msg: string) => void 
         <div>
           <h2>Analítica Real de la Tienda (Últimos 30 días)</h2>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
-            Qué modelos ven más los clientes, cuáles piden más por WhatsApp y qué buscan sin stock.
+            Qué modelos ven más los clientes, cuáles piden más por WhatsApp y qué buscan sin resultados para enseñárselo al buscador en 1 clic.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -533,28 +592,357 @@ export function AdminAnalyticsTab({ onToast }: { onToast: (msg: string) => void 
 
             <div className="analytics-card">
               <h3>
-                <Search size={16} /> Búsquedas sin resultados (oportunidades de stock)
+                <Search size={16} /> Búsquedas sin resultados → Sinónimo en 1 clic
               </h3>
               {data.topEmptySearches.length === 0 ? (
                 <p className="muted-empty">Sin búsquedas fallidas recientes.</p>
               ) : (
                 <div className="analytics-list">
                   {data.topEmptySearches.map((q) => (
-                    <div key={q.query} className="analytics-row">
-                      <strong>&quot;{q.query}&quot;</strong>
-                      <div className="analytics-nums">
-                        <b>
-                          <Check size={12} /> {q.count} búsquedas
-                        </b>
+                    <div key={q.query} className="analytics-row analytics-row--syn">
+                      <div>
+                        <strong>&quot;{q.query}&quot;</strong>
+                        <small style={{ marginLeft: 8, color: 'var(--muted)' }}>
+                          {q.count} búsquedas
+                        </small>
                       </div>
+                      {onSaveSettings && (
+                        <div className="syn-inline-form">
+                          <input
+                            type="text"
+                            className="tbl-input"
+                            placeholder="Mapear a (ej. ecoflow, lifan, jordan)"
+                            value={synonymTargets[q.query] ?? ''}
+                            onChange={(e) =>
+                              setSynonymTargets((prev) => ({
+                                ...prev,
+                                [q.query]: e.target.value,
+                              }))
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="btn btn--primary btn--sm"
+                            disabled={savingSyn}
+                            onClick={() =>
+                              void handleSaveSynonym(q.query, synonymTargets[q.query] ?? '')
+                            }
+                          >
+                            <Plus size={13} /> + Sinónimo
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {settings?.custom_synonyms && Object.keys(settings.custom_synonyms).length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <strong style={{ fontSize: 12 }}>Sinónimos activos creados por Admin:</strong>
+                  <div className="demand-chips" style={{ marginTop: 6 }}>
+                    {Object.entries(settings.custom_synonyms).map(([k, vals]) => (
+                      <span key={k} className="demand-chip">
+                        <b>{k}</b> → {vals.join(', ')}
+                        {onSaveSettings && (
+                          <button
+                            type="button"
+                            className="btn-link"
+                            style={{ marginLeft: 6 }}
+                            onClick={() => void handleRemoveSynonym(k)}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+export function AdminMarketingTab({
+  products,
+  settings,
+  onSaveSettings,
+  onToast,
+}: {
+  products: Product[];
+  settings: StoreSettings;
+  onSaveSettings: (next: StoreSettings) => Promise<void>;
+  onToast: (msg: string) => void;
+}) {
+  const [storyFilter, setStoryFilter] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
+    products.filter((p) => p.featured).slice(0, 1).map((p) => p.id)
+  );
+  const [theme, setTheme] = useState<StoryThemeKey>('urbano');
+  const [headline, setHeadline] = useState('Disponible hoy en Yole Shop');
+  const [storyUrl, setStoryUrl] = useState('');
+  const [rendering, setRendering] = useState(false);
+
+  const [rates, setRates] = useState<PaymentRatesMap>(() => ({
+    ...DEFAULT_PAYMENT_RATES,
+    ...(settings.payment_rates || {}),
+  }));
+  const [savingRates, setSavingRates] = useState(false);
+
+  const [subscribers, setSubscribers] = useState<AlertSubscriber[]>([]);
+  const [loadingSubs, setLoadingSubs] = useState(true);
+
+  useEffect(() => {
+    fetchAlertSubscribers()
+      .then(setSubscribers)
+      .catch(() => setSubscribers([]))
+      .finally(() => setLoadingSubs(false));
+  }, []);
+
+  const filteredPool = useMemo(() => {
+    const q = storyFilter.trim().toLowerCase();
+    return products
+      .filter((p) => p.status === 'active')
+      .filter(
+        (p) =>
+          !q ||
+          p.title.toLowerCase().includes(q) ||
+          p.sku.toLowerCase().includes(q) ||
+          p.brand.toLowerCase().includes(q)
+      )
+      .slice(0, 18);
+  }, [products, storyFilter]);
+
+  const togglePick = (id: string) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 3) return [...prev.slice(1), id];
+      return [...prev, id];
+    });
+  };
+
+  const handleGenerateStory = async () => {
+    const picked = selectedIds
+      .map((id) => products.find((p) => p.id === id))
+      .filter((p): p is Product => Boolean(p));
+    if (picked.length === 0) {
+      onToast('Elige 1 a 3 productos para el Estado 9:16.');
+      return;
+    }
+    setRendering(true);
+    try {
+      const url = await renderStatusStoryDataUrl({
+        products: picked,
+        theme,
+        headline,
+        settings,
+      });
+      setStoryUrl(url);
+      onToast('Estado 1080×1920 generado listo para descargar');
+    } catch {
+      onToast('No se pudo renderizar la imagen');
+    } finally {
+      setRendering(false);
+    }
+  };
+
+  const handleSaveRates = async () => {
+    setSavingRates(true);
+    try {
+      await onSaveSettings({ ...settings, payment_rates: rates });
+      onToast('Tasas y canales de pago guardados');
+    } catch {
+      onToast('Error guardando canales de pago');
+    } finally {
+      setSavingRates(false);
+    }
+  };
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <div>
+          <h2>Marketing, Estados 9:16, Multi-moneda y Alertas PWA</h2>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
+            Genera flyers verticales (1080×1920) para WhatsApp/Instagram, configura Zelle/USDT/EUR/MLC y revisa tus suscriptores de alertas.
+          </p>
+        </div>
+      </div>
+
+      {/* 1. GENERADOR DE ESTADOS 9:16 */}
+      <div className="analytics-card" style={{ marginBottom: 18 }}>
+        <h3>
+          <ImageIcon size={16} /> Generador de Estados WhatsApp / Reels (1080×1920)
+        </h3>
+        <div className="story-builder-grid">
+          <div>
+            <input
+              type="search"
+              className="tbl-input"
+              placeholder="Buscar producto (SKU, EcoFlow, TopMaq, Jordan...)"
+              value={storyFilter}
+              onChange={(e) => setStoryFilter(e.target.value)}
+            />
+            <div className="story-pick-list">
+              {filteredPool.map((p) => {
+                const on = selectedIds.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`chip chip--sm${on ? ' is-active' : ''}`}
+                    onClick={() => togglePick(p.id)}
+                  >
+                    {on ? '✓ ' : '+ '}
+                    {p.sku} · {p.title.slice(0, 28)}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="coupon-create-grid" style={{ marginTop: 12 }}>
+              <select
+                className="tbl-select"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value as StoryThemeKey)}
+              >
+                <option value="urbano">Tema Urbano Oscuro</option>
+                <option value="solar">Tema Energía Solar</option>
+                <option value="movilidad">Tema Motos &amp; Virginia</option>
+                <option value="oferta">Tema Oferta Flash</option>
+              </select>
+              <input
+                type="text"
+                className="tbl-input"
+                placeholder="Título principal del estado"
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={rendering}
+                onClick={() => void handleGenerateStory()}
+              >
+                <Sparkles size={15} /> {rendering ? 'Generando...' : 'Generar Estado 9:16'}
+              </button>
+            </div>
+          </div>
+
+          {storyUrl && (
+            <div className="story-preview-box">
+              <img src={storyUrl} alt="Vista previa Estado WhatsApp 9:16" />
+              <a
+                href={storyUrl}
+                download={`yole-estado-${theme}.png`}
+                className="btn btn--primary btn--sm"
+              >
+                <Download size={14} /> Descargar PNG (1080×1920)
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. MULTI-MONEDA AVANZADA */}
+      <div className="analytics-card" style={{ marginBottom: 18 }}>
+        <h3>Canales de Pago y Tasas Multi-moneda</h3>
+        <div className="rates-grid">
+          {PAYMENT_CHANNEL_ORDER.filter((k) => k !== 'cup').map((key: PaymentChannelKey) => {
+            const cfg = rates[key] || DEFAULT_PAYMENT_RATES[key];
+            return (
+              <div key={key} className="rate-cell">
+                <strong>{cfg.label}</strong>
+                <div className="rate-cell__inputs">
+                  <select
+                    className="tbl-select"
+                    value={cfg.mode}
+                    onChange={(e) =>
+                      setRates((prev) => ({
+                        ...prev,
+                        [key]: { ...cfg, mode: e.target.value === 'rate' ? 'rate' : 'pct' },
+                      }))
+                    }
+                  >
+                    <option value="pct">% ajuste</option>
+                    <option value="rate">Tasa × USD</option>
+                  </select>
+                  <input
+                    type="number"
+                    step="any"
+                    className="tbl-input"
+                    value={cfg.value}
+                    onChange={(e) =>
+                      setRates((prev) => ({
+                        ...prev,
+                        [key]: { ...cfg, value: Number(e.target.value) || 0 },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          style={{ marginTop: 12 }}
+          disabled={savingRates}
+          onClick={() => void handleSaveRates()}
+        >
+          <Check size={14} /> {savingRates ? 'Guardando...' : 'Guardar canales de pago'}
+        </button>
+      </div>
+
+      {/* 3. SUSCRIPTORES DE ALERTAS PWA */}
+      <div className="analytics-card">
+        <div className="admin-panel-head" style={{ marginBottom: 8 }}>
+          <h3>
+            <BellRing size={16} /> Suscriptores a Alertas de Drops ({subscribers.length})
+          </h3>
+          <button
+            type="button"
+            className="btn-outline"
+            onClick={() =>
+              void triggerBrowserDropNotification(
+                '¡Nuevo Drop en Yole Shop!',
+                'Acaban de entrar tenis, equipos solares y motos con stock real.'
+              ).then((ok) =>
+                onToast(
+                  ok
+                    ? 'Notificación de prueba enviada al dispositivo'
+                    : 'Activa permisos de notificación en el menú para probar aquí'
+                )
+              )
+            }
+          >
+            <BellRing size={14} /> Probar Notificación Push aquí
+          </button>
+        </div>
+        {loadingSubs ? (
+          <p className="muted-empty">Cargando suscriptores...</p>
+        ) : subscribers.length === 0 ? (
+          <p className="muted-empty">Aún no hay suscriptores registrados.</p>
+        ) : (
+          <div className="analytics-list">
+            {subscribers.slice(0, 20).map((s) => (
+              <div key={s.id} className="analytics-row">
+                <strong>{s.contact || 'Suscriptor Web Push'}</strong>
+                <div className="analytics-nums">
+                  <span>{s.department}</span>
+                  <span>{s.push_supported ? 'Push activo' : 'WhatsApp'}</span>
+                  <span>{new Date(s.created_at).toLocaleDateString('es-ES')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
