@@ -263,14 +263,15 @@ export function buildComparisonMatrix(
   // Price USD
   const validUsds = usdList.filter((u): u is number => u !== null);
   const minUsd = validUsds.length > 0 ? Math.min(...validUsds) : null;
+  const priceWinners =
+    minUsd !== null && clean.length > 1
+      ? usdList.map((u, i) => (u === minUsd ? i : -1)).filter((i) => i >= 0)
+      : [];
   rows.push({
     key: 'price_usd',
     label: 'Precio USD',
     values: usdList.map((u) => (u !== null ? `$${u} USD` : 'Consultar')),
-    winnerIndices:
-      minUsd !== null && clean.length > 1
-        ? usdList.map((u, i) => (u === minUsd ? i : -1)).filter((i) => i >= 0)
-        : [],
+    winnerIndices: priceWinners.length < clean.length ? priceWinners : [],
   });
 
   // Price CUP

@@ -394,7 +394,10 @@ export function AssistantModal({
                               <SmartImage
                                 src={rec.product.image_url}
                                 alt={rec.product.title}
-                                className="assistant-mini-card__img"
+                                variant="compact"
+                                width={56}
+                                height={56}
+                                wrapperClassName="assistant-mini-card__img"
                               />
                               <div className="assistant-mini-card__info">
                                 <span className={`spec-pill spec-pill--${rec.fitTone}`}>
@@ -442,7 +445,10 @@ export function AssistantModal({
                                   <SmartImage
                                     src={p.image_url}
                                     alt={p.title}
-                                    className="assistant-mini-card__img"
+                                    variant="compact"
+                                    width={56}
+                                    height={56}
+                                    wrapperClassName="assistant-mini-card__img"
                                   />
                                   <div className="assistant-mini-card__info">
                                     <strong>{p.title}</strong>
@@ -597,7 +603,10 @@ export function AssistantModal({
                       <SmartImage
                         src={rec.product.image_url}
                         alt={rec.product.title}
-                        className="assistant-mini-card__img"
+                        variant="compact"
+                        width={56}
+                        height={56}
+                        wrapperClassName="assistant-mini-card__img"
                       />
                       <div className="assistant-mini-card__info">
                         <span className={`spec-pill spec-pill--${rec.fitTone}`}>
@@ -652,7 +661,10 @@ export function AssistantModal({
                           <SmartImage
                             src={p.image_url}
                             alt={p.title}
-                            className="compare-pill-card__img"
+                            variant="compact"
+                            width={38}
+                            height={38}
+                            wrapperClassName="compare-pill-card__img"
                           />
                           <div className="compare-pill-card__meta">
                             <strong>{p.title}</strong>
@@ -751,7 +763,10 @@ export function AssistantModal({
                           <SmartImage
                             src={p.image_url}
                             alt={p.title}
-                            className="compare-pick-row__img"
+                            variant="compact"
+                            width={40}
+                            height={40}
+                            wrapperClassName="compare-pick-row__img"
                           />
                           <div>
                             <strong>{p.title}</strong>

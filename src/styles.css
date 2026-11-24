@@ -7271,9 +7271,10 @@ select,
   border: 1px solid var(--border);
   background: var(--surface);
 }
+.smart-img-wrap.assistant-mini-card__img,
 .assistant-mini-card__img {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   border-radius: 8px;
   flex-shrink: 0;
 }
@@ -7423,9 +7424,10 @@ select,
   padding: 6px 8px;
   max-width: 240px;
 }
+.smart-img-wrap.compare-pill-card__img,
 .compare-pill-card__img {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 6px;
   flex-shrink: 0;
 }
@@ -7547,9 +7549,10 @@ select,
   text-align: left;
   cursor: pointer;
 }
+.smart-img-wrap.compare-pick-row__img,
 .compare-pick-row__img {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 6px;
   flex-shrink: 0;
 }
@@ -7674,6 +7677,7 @@ select,
   align-items: center;
   gap: 8px;
 }
+.smart-img-wrap.cart-cross-sell__img,
 .cart-cross-sell__img {
   width: 38px;
   height: 38px;
