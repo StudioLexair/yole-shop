@@ -110,7 +110,9 @@ export function BottomMenuSheet({
 
         <header className="sheet-head">
           <div className="brand-mark">
-            <span className="brand-monogram">YS</span>
+            <span className="brand-monogram brand-monogram--img">
+              <img src="/brand-mark.webp" alt="Logo Yole Shop" width={36} height={36} />
+            </span>
             <div>
               <strong>{settings.store_name.toUpperCase()}</strong>
               <small>{settings.location_text}</small>

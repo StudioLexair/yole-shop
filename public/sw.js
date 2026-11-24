@@ -1,11 +1,13 @@
-const CACHE_SHELL = 'yole-shell-v10';
-const CACHE_MEDIA = 'yole-media-v10';
-const CACHE_API = 'yole-api-v10';
+const CACHE_SHELL = 'yole-shell-v11';
+const CACHE_MEDIA = 'yole-media-v11';
+const CACHE_API = 'yole-api-v11';
 
 const SHELL_URLS = [
   '/',
   '/manifest.webmanifest',
   '/favicon.svg',
+  '/brand-mark.webp',
+  '/brand-logo.webp',
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',

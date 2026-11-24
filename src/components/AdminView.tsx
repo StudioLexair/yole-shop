@@ -11,6 +11,7 @@ import {
   Lock,
   LogOut,
   MessageCircle,
+  Moon,
   Package,
   Plus,
   RefreshCw,
@@ -19,6 +20,7 @@ import {
   Settings,
   ShoppingCart,
   Sparkles,
+  Sun,
   Trash2,
   X,
   Zap,
@@ -56,11 +58,14 @@ import {
   deleteProduct,
   fetchOrders,
   makePresetSlug,
+  readThemeMode,
   savePricePreset,
   saveProduct,
   saveStoreSettings,
   updateOrderStatus,
   uploadProductWebP,
+  writeThemeMode,
+  type ThemeMode,
 } from '../lib/catalog';
 import { supabase } from '../lib/supabase';
 
@@ -69,6 +74,8 @@ interface AdminViewProps {
   categories: Category[];
   products: Product[];
   pricePresets: PricePreset[];
+  themeMode?: ThemeMode;
+  onToggleTheme?: () => void;
   onRefresh: () => Promise<void>;
   onBackToStore: () => void;
 }
@@ -150,9 +157,25 @@ export function AdminView({
   categories,
   products,
   pricePresets,
+  themeMode,
+  onToggleTheme,
   onRefresh,
   onBackToStore,
 }: AdminViewProps) {
+  const [localTheme, setLocalTheme] = useState<ThemeMode>(() => themeMode ?? readThemeMode());
+  const activeTheme = themeMode ?? localTheme;
+
+  const handleToggleAdminTheme = () => {
+    if (onToggleTheme) {
+      onToggleTheme();
+      return;
+    }
+    setLocalTheme((prev) => {
+      const next: ThemeMode = prev === 'dark' ? 'light' : 'dark';
+      writeThemeMode(next);
+      return next;
+    });
+  };
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [email, setEmail] = useState('studio.lexair@gmail.com');
@@ -1079,9 +1102,13 @@ export function AdminView({
             <ArrowLeft size={16} /> Volver a {settings.store_name}
           </button>
           <div className="admin-login-head">
-            <div className="admin-lock-badge">
-              <Lock size={22} />
-            </div>
+            <img
+              src="/brand-logo.webp"
+              alt={`Logo ${settings.store_name}`}
+              className="admin-login-logo"
+              width={92}
+              height={92}
+            />
             <h1>Panel Admin · {settings.store_name}</h1>
             <p>Gestiona precios por grupos, tasa USD, fotos WebP y pedidos WhatsApp.</p>
           </div>
@@ -1123,6 +1150,9 @@ export function AdminView({
             <ArrowLeft size={17} />
             <span>Tienda</span>
           </button>
+          <span className="brand-monogram brand-monogram--img admin-topbar-logo">
+            <img src="/brand-mark.webp" alt="" width={34} height={34} />
+          </span>
           <div>
             <strong>Admin · {settings.store_name}</strong>
             <small>{session.user.email}</small>
@@ -1168,6 +1198,15 @@ export function AdminView({
         </nav>
 
         <div className="admin-topbar__right">
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={handleToggleAdminTheme}
+            title={activeTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+            aria-label={activeTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+          >
+            {activeTheme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <button type="button" className="btn-ghost" onClick={onRefresh} title="Recargar datos">
             <RefreshCw size={16} />
           </button>

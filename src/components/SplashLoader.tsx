@@ -17,7 +17,9 @@ export function SplashLoader({ visible, label = 'Preparando colección...' }: Sp
             <circle className="yole-splash__ring-track" cx="48" cy="48" r="43" />
             <circle className="yole-splash__ring-arc" cx="48" cy="48" r="43" />
           </svg>
-          <span className="yole-splash__monogram">YS</span>
+          <span className="yole-splash__monogram yole-splash__monogram--img">
+            <img src="/brand-mark.webp" alt="Yole Shop" width={60} height={60} />
+          </span>
         </div>
 
         <div className="yole-splash__brand">

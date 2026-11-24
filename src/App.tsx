@@ -581,6 +581,10 @@ export function App() {
             categories={categories}
             products={products}
             pricePresets={pricePresets}
+            themeMode={themeMode}
+            onToggleTheme={() =>
+              setThemeMode((m) => (m === 'dark' ? 'light' : 'dark'))
+            }
             onRefresh={refreshData}
             onBackToStore={() => navigateAdmin(false)}
           />
@@ -609,7 +613,9 @@ export function App() {
               handleSelectDept('all');
             }}
           >
-            <span className="brand-monogram">YS</span>
+            <span className="brand-monogram brand-monogram--img">
+              <img src="/brand-mark.webp" alt="Logo Yole Shop" width={36} height={36} />
+            </span>
             <div>
               <strong>{settings.store_name.toUpperCase()}</strong>
               <small>Calzado &amp; Moda</small>
