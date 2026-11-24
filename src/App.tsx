@@ -31,11 +31,13 @@ import {
   filterProducts,
   pushRecentSku,
   readCachedStoreData,
+  readDisplayCurrency,
   readFavoriteSkus,
   readRecentSkus,
   readThemeMode,
   validateCouponCode,
   writeCachedStoreData,
+  writeDisplayCurrency,
   writeFavoriteSkus,
   writeThemeMode,
   type CalzadoSubFilter,
@@ -128,7 +130,9 @@ export function App() {
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [sort, setSort] = useState<SortMode>('featured');
-  const [displayCurrency, setDisplayCurrency] = useState<Currency>('CUP');
+  const [displayCurrency, setDisplayCurrency] = useState<Currency>(() =>
+    readDisplayCurrency()
+  );
   const [visibleLimit, setVisibleLimit] = useState(PAGE_STEP);
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -164,6 +168,11 @@ export function App() {
     }
     writeThemeMode(themeMode);
   }, [themeMode]);
+
+  const handleChangeCurrency = useCallback((nextCurrency: Currency) => {
+    setDisplayCurrency(nextCurrency);
+    writeDisplayCurrency(nextCurrency);
+  }, []);
 
   useEffect(() => {
     if (import.meta.env.MODE === 'test' || typeof window === 'undefined') return;
@@ -1592,6 +1601,7 @@ export function App() {
       <CartDrawer
         open={cartOpen}
         items={cart}
+        displayCurrency={displayCurrency}
         settings={settings}
         activeCoupon={activeCoupon}
         onApplyCoupon={setActiveCoupon}
@@ -1678,7 +1688,7 @@ export function App() {
         }}
         onSelectDept={handleSelectDept}
         onSelectSheinGender={handleSelectSheinGender}
-        onChangeCurrency={setDisplayCurrency}
+        onChangeCurrency={handleChangeCurrency}
         onOpenTracker={() => setTrackerOpen(true)}
         directWaUrl={directWaUrl}
         canPromptInstall={Boolean(installPrompt)}

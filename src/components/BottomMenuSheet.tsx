@@ -264,22 +264,23 @@ export function BottomMenuSheet({
                 </span>
                 <small style={{ color: 'var(--muted)', fontSize: 12 }}>
                   1 USD = {formatCup(settings.usd_to_cup_rate)}
+                  {displayCurrency === 'USD' ? ' · Tenis en CUP' : ''}
                 </small>
               </div>
               <div className="curr-toggle">
-                <button
-                  type="button"
-                  className={displayCurrency === 'CUP' ? 'is-active' : ''}
-                  onClick={() => onChangeCurrency('CUP')}
-                >
-                  CUP
-                </button>
                 <button
                   type="button"
                   className={displayCurrency === 'USD' ? 'is-active' : ''}
                   onClick={() => onChangeCurrency('USD')}
                 >
                   USD
+                </button>
+                <button
+                  type="button"
+                  className={displayCurrency === 'CUP' ? 'is-active' : ''}
+                  onClick={() => onChangeCurrency('CUP')}
+                >
+                  CUP
                 </button>
               </div>
             </div>

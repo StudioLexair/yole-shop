@@ -14,6 +14,7 @@ import {
 import type {
   CartItem,
   Coupon,
+  Currency,
   DeliveryType,
   PaymentMethod,
   StoreSettings,
@@ -24,6 +25,7 @@ import {
   formatCup,
   formatUsd,
   getDisplayPrice,
+  isCupLockedFootwear,
   summarizeCart,
 } from '../lib/pricing';
 import {
@@ -40,6 +42,7 @@ import { SmartImage } from './SmartImage';
 interface CartDrawerProps {
   open: boolean;
   items: CartItem[];
+  displayCurrency?: Currency;
   settings: StoreSettings;
   activeCoupon?: Coupon | null;
   onApplyCoupon?: (coupon: Coupon | null) => void;
@@ -53,6 +56,7 @@ interface CartDrawerProps {
 export function CartDrawer({
   open,
   items,
+  displayCurrency = 'USD',
   settings,
   activeCoupon = null,
   onApplyCoupon,
@@ -230,6 +234,14 @@ export function CartDrawer({
     ? `${typeof window !== 'undefined' ? window.location.origin : 'https://yoleshop.ddns.net'}/?track=${encodeURIComponent(sentCode)}`
     : '';
 
+  const rate = settings.usd_to_cup_rate > 0 ? settings.usd_to_cup_rate : 980;
+  const allCupFootwear =
+    items.length > 0 && items.every((it) => isCupLockedFootwear(it.product));
+  const summaryInUsd = displayCurrency === 'USD' && !allCupFootwear;
+  const deliveryFeeUsd = Math.round((summary.deliveryFeeCup / rate) * 100) / 100;
+  const transferFeeUsd = Math.round((summary.transferFeeCup / rate) * 100) / 100;
+  const totalUsdWithExtras = Math.round((summary.totalCupWithExtras / rate) * 100) / 100;
+
   return (
     <div
       className="drawer-backdrop"
@@ -269,7 +281,7 @@ export function CartDrawer({
                 {items.map((it) => {
                   const pInfo = getDisplayPrice(
                     it.product,
-                    it.product.currency,
+                    displayCurrency,
                     settings.usd_to_cup_rate
                   );
                   return (
@@ -371,32 +383,65 @@ export function CartDrawer({
                 <div className="checkout-summary">
                   {summary.subtotalCup > 0 && (
                     <div className="sum-row">
-                      <span>Subtotal ({formatUsd(summary.subtotalUsd)})</span>
-                      <strong>{formatCup(summary.subtotalCup)}</strong>
+                      <span>
+                        Subtotal (
+                        {summaryInUsd
+                          ? formatCup(summary.subtotalCup)
+                          : formatUsd(summary.subtotalUsd)}
+                        )
+                      </span>
+                      <strong>
+                        {summaryInUsd
+                          ? formatUsd(summary.subtotalUsd)
+                          : formatCup(summary.subtotalCup)}
+                      </strong>
                     </div>
                   )}
                   {summary.discountCup > 0 && activeCoupon && (
                     <div className="sum-row sum-row--discount">
                       <span>Descuento {activeCoupon.code}</span>
-                      <strong>-{formatCup(summary.discountCup)}</strong>
+                      <strong>
+                        -
+                        {summaryInUsd
+                          ? formatUsd(summary.discountUsd)
+                          : formatCup(summary.discountCup)}
+                      </strong>
                     </div>
                   )}
                   {summary.deliveryFeeCup > 0 && (
                     <div className="sum-row">
                       <span>Domicilio base ({settings.location_text.split('·')[0].trim()})</span>
-                      <span>{formatCup(summary.deliveryFeeCup)}</span>
+                      <span>
+                        {summaryInUsd
+                          ? formatUsd(deliveryFeeUsd)
+                          : formatCup(summary.deliveryFeeCup)}
+                      </span>
                     </div>
                   )}
                   {summary.transferFeeCup > 0 && (
                     <div className="sum-row">
                       <span>Transferencia (+{settings.transfer_surcharge_pct}%)</span>
-                      <span>{formatCup(summary.transferFeeCup)}</span>
+                      <span>
+                        {summaryInUsd
+                          ? formatUsd(transferFeeUsd)
+                          : formatCup(summary.transferFeeCup)}
+                      </span>
                     </div>
                   )}
                   {summary.totalCupWithExtras > 0 && (
                     <div className="sum-row sum-row--total">
-                      <span>Total estimado</span>
-                      <strong>{formatCup(summary.totalCupWithExtras)}</strong>
+                      <span>
+                        Total estimado (
+                        {summaryInUsd
+                          ? formatCup(summary.totalCupWithExtras)
+                          : formatUsd(totalUsdWithExtras)}
+                        )
+                      </span>
+                      <strong>
+                        {summaryInUsd
+                          ? formatUsd(totalUsdWithExtras)
+                          : formatCup(summary.totalCupWithExtras)}
+                      </strong>
                     </div>
                   )}
                   {summary.hasUnpricedItems && (
@@ -590,8 +635,18 @@ export function CartDrawer({
           <footer className="drawer-footer">
             {summary.totalCupWithExtras > 0 && (
               <div className="drawer-footer__total">
-                <span>Total estimado</span>
-                <strong>{formatCup(summary.totalCupWithExtras)}</strong>
+                <span>
+                  Total estimado (
+                  {summaryInUsd
+                    ? formatCup(summary.totalCupWithExtras)
+                    : formatUsd(totalUsdWithExtras)}
+                  )
+                </span>
+                <strong>
+                  {summaryInUsd
+                    ? formatUsd(totalUsdWithExtras)
+                    : formatCup(summary.totalCupWithExtras)}
+                </strong>
               </div>
             )}
             <button

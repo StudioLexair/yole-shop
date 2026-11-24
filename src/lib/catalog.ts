@@ -671,3 +671,23 @@ export function writeThemeMode(mode: ThemeMode): void {
     // ignore
   }
 }
+
+const CURRENCY_KEY = 'yole_shop_currency_v1';
+
+export function readDisplayCurrency(): Currency {
+  if (typeof window === 'undefined') return 'USD';
+  try {
+    return window.localStorage.getItem(CURRENCY_KEY) === 'CUP' ? 'CUP' : 'USD';
+  } catch {
+    return 'USD';
+  }
+}
+
+export function writeDisplayCurrency(currency: Currency): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(CURRENCY_KEY, currency);
+  } catch {
+    // ignore
+  }
+}

@@ -167,12 +167,30 @@ describe('Yole Shop App', () => {
     expect(screen.getByText('Vestido Corto Satén Chocolate')).toBeInTheDocument();
     expect(screen.queryByText(/Carteras & Relojes/i)).not.toBeInTheDocument();
 
-    // Cambio de moneda vive dentro del panel de menú hamburguesa
+    // Al abrir inicia en USD (toda la tienda en USD primero, excepto tenis/zapatos en CUP)
+    expect(screen.getByText('$18 USD')).toBeInTheDocument();
+    expect(screen.getByText('≈ $35.71 USD')).toBeInTheDocument();
+
+    // Cambio de moneda vive dentro del panel de menú hamburguesa, con USD primero y CUP segundo
     fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
     const menuPanel = screen.getByRole('dialog', { name: 'Menú principal' });
-    fireEvent.click(within(menuPanel).getByRole('button', { name: 'USD' }));
+    const usdBtn = within(menuPanel).getByRole('button', { name: 'USD' });
+    const cupBtn = within(menuPanel).getByRole('button', { name: 'CUP' });
+    expect(usdBtn.className).toContain('is-active');
+    expect(
+      Boolean(usdBtn.compareDocumentPosition(cupBtn) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
+    fireEvent.click(cupBtn);
+    expect(localStorage.getItem('yole_shop_currency_v1')).toBe('CUP');
     fireEvent.click(within(menuPanel).getByRole('button', { name: 'Cerrar menú' }));
-    expect(screen.getByText('$35.71 USD')).toBeInTheDocument();
+    expect(screen.getByText('17.640 CUP')).toBeInTheDocument();
+
+    // Volver a USD y verificar persistencia
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Menú principal' })).getByRole('button', { name: 'USD' }));
+    expect(localStorage.getItem('yole_shop_currency_v1')).toBe('USD');
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Menú principal' })).getByRole('button', { name: 'Cerrar menú' }));
+    expect(screen.getByText('$18 USD')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
     const modal = screen.getByRole('dialog');
@@ -493,5 +511,22 @@ describe('Yole Shop App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abrir carrito' }));
     const cartDialog = screen.getByRole('dialog', { name: 'Carrito de compra' });
     expect(within(cartDialog).getByRole('button', { name: /Transf\./i })).toBeDisabled();
+    // En modo USD por defecto, el carrito muestra el subtotal en USD primero
+    expect(within(cartDialog).getAllByText('$14 USD').length).toBeGreaterThan(0);
+  });
+
+  it('respeta la moneda guardada en localStorage cuando el usuario elige CUP sin borrar su preferencia', async () => {
+    localStorage.setItem('yole_shop_currency_v1', 'CUP');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cartera Dior Beige & Negra')).toBeInTheDocument();
+    });
+    expect(screen.getByText('17.640 CUP')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
+    const menuPanel = screen.getByRole('dialog', { name: 'Menú principal' });
+    expect(within(menuPanel).getByRole('button', { name: 'CUP' }).className).toContain('is-active');
+    expect(within(menuPanel).getByRole('button', { name: 'USD' }).className).not.toContain('is-active');
   });
 });

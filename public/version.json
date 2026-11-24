@@ -1,13 +1,13 @@
 {
-  "version": "1.3.4",
+  "version": "1.3.5",
   "buildId": "local",
-  "releasedAt": "2026-11-16T16:25:00Z",
+  "releasedAt": "2026-11-16T16:35:00Z",
   "mandatory": false,
-  "title": "¡Mejora visual en Calzado y Shein!",
-  "description": "Separación limpia entre Tenis 3A/G5 y Zuecos & Sandalias Shein con acceso directo en ambos departamentos.",
+  "title": "¡Precios en USD por defecto!",
+  "description": "USD ahora aparece como moneda principal en toda la tienda (excepto tenis en CUP) y tu elección de moneda se guarda.",
   "features": [
-    "Sub-selector en Calzado & Tenis: Tenis 3A & G5 por defecto y Zuecos & Sandalias Shein aparte",
-    "Zuecos & Sandalias Shein también disponibles dentro de Moda Shein",
-    "Etiqueta SHEIN uniforme y bloqueo automático de transferencia para toda la línea Shein"
+    "USD es la primera moneda por defecto en Shein, Accesorios y Motos & Virginia",
+    "Los tenis y zapatos 3A/G5 mantienen sus precios principales en CUP (dinero cubano)",
+    "Tu selección de moneda (USD o CUP) queda guardada en tu dispositivo"
   ]
 }

@@ -6,6 +6,7 @@ import {
   cartHasSheinItems,
   formatWhatsAppOrderText,
   getDisplayPrice,
+  isCupLockedFootwear,
   isSheinDepartment,
   isSheinProduct,
   normalizeWhatsAppDigits,
@@ -79,6 +80,38 @@ describe('pricing & WhatsApp helpers', () => {
     const shoePrice = getDisplayPrice(sampleShoe, 'CUP', 920);
     expect(shoePrice.isConsult).toBe(false);
     expect(shoePrice.primary).toContain('35');
+
+    // En modo USD por defecto, los tenis/zapatos mantienen CUP primero y todo lo demás muestra USD primero
+    const shoeInUsdMode = getDisplayPrice(sampleShoe, 'USD', 920);
+    expect(shoeInUsdMode.primary).toContain('CUP');
+    expect(shoeInUsdMode.secondary).toContain('USD');
+    expect(isCupLockedFootwear(sampleShoe)).toBe(true);
+
+    const accUsdMode = getDisplayPrice(
+      {
+        price: 18,
+        currency: 'USD',
+        department: 'accesorios',
+        category_id: 'bolsos-relojes',
+      },
+      'USD',
+      980
+    );
+    expect(accUsdMode.primary).toBe('$18 USD');
+    expect(accUsdMode.secondary).toContain('CUP');
+
+    const zuecoUsdMode = getDisplayPrice(
+      {
+        price: 32,
+        currency: 'USD',
+        department: 'calzado',
+        category_id: 'zuecos-sandalias',
+      },
+      'USD',
+      980
+    );
+    expect(isCupLockedFootwear({ department: 'calzado', category_id: 'zuecos-sandalias' })).toBe(false);
+    expect(zuecoUsdMode.primary).toBe('$32 USD');
 
     const sheinPrice = getDisplayPrice(sampleShein, 'USD', 920);
     expect(sheinPrice.isConsult).toBe(true);

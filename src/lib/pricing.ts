@@ -29,6 +29,15 @@ export function cartHasSheinItems(items: CartItem[]): boolean {
   return items.some((it) => isSheinProduct(it.product));
 }
 
+export function isCupLockedFootwear(
+  product: Partial<Pick<Product, 'department' | 'category_id'>>
+): boolean {
+  return (
+    product.department === 'calzado' &&
+    product.category_id !== 'zuecos-sandalias'
+  );
+}
+
 export function resolveProductImageUrl(sku: string, imageUrl?: string): string {
   if (imageUrl && imageUrl.trim()) return imageUrl.trim();
   const cleanSku = sku.replace(/[^a-zA-Z0-9_-]/g, '');
@@ -93,7 +102,8 @@ export function priceInUsd(
 }
 
 export function getDisplayPrice(
-  product: Pick<Product, 'price' | 'currency'>,
+  product: Pick<Product, 'price' | 'currency'> &
+    Partial<Pick<Product, 'department' | 'category_id'>>,
   displayCurrency: Currency,
   usdToCupRate: number
 ): { primary: string; secondary: string | null; isConsult: boolean } {
@@ -104,7 +114,11 @@ export function getDisplayPrice(
       isConsult: true,
     };
   }
-  if (displayCurrency === 'CUP') {
+  const effectiveCurrency: Currency =
+    displayCurrency === 'USD' && isCupLockedFootwear(product)
+      ? 'CUP'
+      : displayCurrency;
+  if (effectiveCurrency === 'CUP') {
     const cup = priceInCup(product.price, product.currency, usdToCupRate)!;
     const usd = priceInUsd(product.price, product.currency, usdToCupRate)!;
     return {
