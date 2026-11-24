@@ -1,6 +1,6 @@
-const CACHE_SHELL = 'yole-shell-v15';
-const CACHE_MEDIA = 'yole-media-v15';
-const CACHE_API = 'yole-api-v15';
+const CACHE_SHELL = 'yole-shell-v16';
+const CACHE_MEDIA = 'yole-media-v16';
+const CACHE_API = 'yole-api-v16';
 
 const SHELL_URLS = [
   '/',

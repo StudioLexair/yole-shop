@@ -20,6 +20,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  ScanSearch,
   Search,
   Settings,
   ShoppingCart,
@@ -79,6 +80,7 @@ import {
   AdminCouponsTab,
   AdminRequestsTab,
 } from './AdminExtraTabs';
+import { AdminPhotoSyncTab } from './AdminPhotoSyncTab';
 import {
   bumpSemver,
   checkAppUpdate,
@@ -102,6 +104,7 @@ interface AdminViewProps {
 
 type AdminTab =
   | 'products'
+  | 'photosync'
   | 'presets'
   | 'orders'
   | 'requests'
@@ -1239,6 +1242,13 @@ export function AdminView({
           </button>
           <button
             type="button"
+            className={tab === 'photosync' ? 'is-active' : ''}
+            onClick={() => setTab('photosync')}
+          >
+            <ScanSearch size={16} /> Sincronizar Fotos
+          </button>
+          <button
+            type="button"
             className={tab === 'presets' ? 'is-active' : ''}
             onClick={() => setTab('presets')}
           >
@@ -2353,6 +2363,15 @@ export function AdminView({
               </div>
             )}
           </section>
+        )}
+
+        {tab === 'photosync' && (
+          <AdminPhotoSyncTab
+            products={products}
+            categories={categories}
+            onRefresh={onRefresh}
+            onNotify={showToast}
+          />
         )}
 
         {tab === 'requests' && (

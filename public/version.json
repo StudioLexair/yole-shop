@@ -1,13 +1,13 @@
 {
-  "version": "1.3.1",
+  "version": "1.3.2",
   "buildId": "local",
-  "releasedAt": "2026-11-24T16:45:00Z",
+  "releasedAt": "2026-11-24T17:15:00Z",
   "mandatory": false,
   "title": "¡Actualización disponible!",
-  "description": "Previsualización real con foto y precio al compartir productos por WhatsApp, más todas las nuevas funciones.",
+  "description": "Nuevo Sincronizador Masivo de Fotos en el panel y ficha de producto refinada.",
   "features": [
-    "Preview real con foto y precio al compartir enlaces",
-    "Seguimiento de pedido con código QR y Cupones VIP",
-    "Solicitudes de talla y Drop Recién Llegados"
+    "Sincronizador masivo de fotos ($0 gratis) con detección de tallas tachadas",
+    "Botones compactos en una línea dentro de la ficha",
+    "Previews reales con foto y precio en WhatsApp"
   ]
 }
