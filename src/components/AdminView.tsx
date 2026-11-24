@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
@@ -303,10 +303,12 @@ export function AdminView({
   const [newPass2, setNewPass2] = useState('');
   const [passMsg, setPassMsg] = useState('');
 
-  const showToast = (msg: string) => {
+  const toastTimerRef = useRef<number | null>(null);
+  const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3400);
-  };
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(''), 3400);
+  }, []);
 
   useEffect(() => {
     setCfg(settings);

@@ -68,7 +68,6 @@ import {
 import {
   applyGestorCatalogOverlay,
   captureGestorSlugFromUrl,
-  clearStoredGestorSlug,
   fetchPublicGestorCatalog,
 } from './lib/gestorService';
 import { checkAppUpdate, type EvaluatedUpdateState } from './lib/versionManager';
@@ -1067,9 +1066,7 @@ export function App() {
             <div>
               <strong>{effectiveSettings.store_name.toUpperCase()}</strong>
               <small>
-                {publicGestor
-                  ? `Catálogo oficial · ${publicGestor.store_label || publicGestor.slug}`
-                  : 'Calzado, Moda & Motos'}
+                {publicGestor ? 'Catálogo verificado · Pedidos directos' : 'Calzado, Moda & Motos'}
               </small>
             </div>
           </a>
@@ -1321,26 +1318,6 @@ export function App() {
             </span>
             <button type="button" className="btn-link" onClick={() => setCartOpen(true)}>
               Usar en carrito
-            </button>
-          </div>
-        )}
-
-        {publicGestor && (
-          <div className="vip-active-banner" role="status">
-            <span>
-              Catálogo personalizado de <strong>{publicGestor.store_label || publicGestor.slug}</strong>
-            </span>
-            <button
-              type="button"
-              className="btn-link"
-              onClick={() => {
-                clearStoredGestorSlug();
-                setActiveGestorSlug('');
-                setPublicGestor(null);
-                window.history.replaceState({}, '', '/');
-              }}
-            >
-              Ver tienda oficial
             </button>
           </div>
         )}

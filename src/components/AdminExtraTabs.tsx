@@ -978,7 +978,6 @@ export function AdminGestoresTab({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const list = await adminFetchAllGestores();
       setGestores(list);
