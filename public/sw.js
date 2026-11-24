@@ -1,6 +1,6 @@
-const CACHE_SHELL = 'yole-shell-v11';
-const CACHE_MEDIA = 'yole-media-v11';
-const CACHE_API = 'yole-api-v11';
+const CACHE_SHELL = 'yole-shell-v12';
+const CACHE_MEDIA = 'yole-media-v12';
+const CACHE_API = 'yole-api-v12';
 
 const SHELL_URLS = [
   '/',
@@ -110,14 +110,32 @@ async function networkFirstWithCache(request, cacheName, fallbackUrl) {
   return Response.error();
 }
 
+self.addEventListener('message', (event) => {
+  const data = event && event.data;
+  if (!data || typeof data !== 'object') return;
+  if (data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+  if (data.type === 'PURGE_AND_UPDATE') {
+    event.waitUntil(
+      Promise.all([
+        caches.delete(CACHE_SHELL).catch(() => false),
+        caches.delete(CACHE_API).catch(() => false),
+      ]).then(() => self.skipWaiting())
+    );
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  // Never intercept Supabase auth endpoints or Studio Lexair Ads network
+  // Never intercept Supabase auth/functions, Studio Lexair Ads, or live version manifest
   if (
+    url.pathname === '/version.json' ||
     url.pathname.includes('/auth/v1/') ||
     url.pathname.includes('/functions/v1/') ||
     url.hostname === 'studiolexair.ddns.net'

@@ -67,6 +67,14 @@ import {
   writeThemeMode,
   type ThemeMode,
 } from '../lib/catalog';
+import {
+  bumpSemver,
+  checkAppUpdate,
+  getEmbeddedVersionInfo,
+  saveRemoteRelease,
+  type EvaluatedUpdateState,
+} from '../lib/versionManager';
+import { UpdateModal } from './UpdateModal';
 import { supabase } from '../lib/supabase';
 
 interface AdminViewProps {
@@ -80,7 +88,7 @@ interface AdminViewProps {
   onBackToStore: () => void;
 }
 
-type AdminTab = 'products' | 'presets' | 'orders' | 'settings' | 'security';
+type AdminTab = 'products' | 'presets' | 'orders' | 'settings' | 'version' | 'security';
 type QuickFilter =
   | 'all'
   | 'unpriced'
@@ -223,6 +231,23 @@ export function AdminView({
   // Settings draft
   const [cfg, setCfg] = useState<StoreSettings>(settings);
   const [savingCfg, setSavingCfg] = useState(false);
+
+  // Version Manager tab state
+  const embeddedVer = useMemo(() => getEmbeddedVersionInfo(), []);
+  const [verStatus, setVerStatus] = useState<EvaluatedUpdateState | null>(null);
+  const [verChecking, setVerChecking] = useState(false);
+  const [verLatest, setVerLatest] = useState(embeddedVer.version);
+  const [verMin, setVerMin] = useState(embeddedVer.version);
+  const [verMandatory, setVerMandatory] = useState(true);
+  const [verTitle, setVerTitle] = useState('¡Actualización disponible!');
+  const [verDesc, setVerDesc] = useState(
+    'Actualiza Yole Shop para cargar las nuevas funciones, diseño mejorado y catálogo al día.'
+  );
+  const [verFeaturesText, setVerFeaturesText] = useState(
+    'Nuevo emblema oficial Yole Shop con mejoras visuales\nModo oscuro y claro corregido en tienda y panel\nControl automático de versiones para cargar mejoras al instante'
+  );
+  const [savingVer, setSavingVer] = useState(false);
+  const [previewUpdateModal, setPreviewUpdateModal] = useState(false);
 
   // New product modal
   const [newOpen, setNewOpen] = useState(false);
@@ -1187,6 +1212,31 @@ export function AdminView({
             onClick={() => setTab('settings')}
           >
             <Settings size={16} /> Ajustes
+          </button>
+          <button
+            type="button"
+            className={tab === 'version' ? 'is-active' : ''}
+            onClick={() => {
+              setTab('version');
+              setVerChecking(true);
+              void checkAppUpdate()
+                .then((res) => {
+                  setVerStatus(res);
+                  if (res.remoteRelease) {
+                    setVerLatest(res.remoteRelease.latest_version || embeddedVer.version);
+                    setVerMin(res.remoteRelease.min_version || embeddedVer.version);
+                    setVerMandatory(res.remoteRelease.mandatory);
+                    setVerTitle(res.remoteRelease.title);
+                    setVerDesc(res.remoteRelease.description);
+                    if (res.remoteRelease.features.length) {
+                      setVerFeaturesText(res.remoteRelease.features.join('\n'));
+                    }
+                  }
+                })
+                .finally(() => setVerChecking(false));
+            }}
+          >
+            <Sparkles size={16} /> Versión
           </button>
           <button
             type="button"
@@ -2347,7 +2397,230 @@ export function AdminView({
             </form>
           </section>
         )}
+
+        {tab === 'version' && (
+          <section className="admin-panel">
+            <div className="admin-panel-head">
+              <div>
+                <h2>Manager de Versiones y Actualizaciones</h2>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
+                  Publica versiones nuevas y controla el modal obligatorio dentro de la app para todos los usuarios.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  disabled={verChecking}
+                  onClick={() => {
+                    setVerChecking(true);
+                    void checkAppUpdate()
+                      .then((res) => {
+                        setVerStatus(res);
+                        showToast(
+                          res.updateAvailable
+                            ? `Actualización detectada: v${res.targetVersion}`
+                            : `Todo al día en v${res.currentVersion}`
+                        );
+                      })
+                      .finally(() => setVerChecking(false));
+                  }}
+                >
+                  <RefreshCw size={15} /> {verChecking ? 'Verificando...' : 'Buscar actualización'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  onClick={() => setPreviewUpdateModal(true)}
+                >
+                  <Sparkles size={15} /> Ver modal de actualización
+                </button>
+              </div>
+            </div>
+
+            <div className="version-admin-cards">
+              <div className="kpi-card">
+                <span>Versión instalada en esta sesión</span>
+                <strong>v{embeddedVer.version}</strong>
+                <small style={{ color: 'var(--muted)', fontSize: 11 }}>
+                  Build: {embeddedVer.buildId}
+                </small>
+              </div>
+              <div className="kpi-card">
+                <span>Manifiesto en servidor (/version.json)</span>
+                <strong>
+                  {verStatus?.manifest ? `v${verStatus.manifest.version}` : 'Listo al consultar'}
+                </strong>
+                <small style={{ color: 'var(--muted)', fontSize: 11 }}>
+                  {verStatus?.manifest?.buildId
+                    ? `Build: ${verStatus.manifest.buildId}`
+                    : 'Pulsa "Buscar actualización"'}
+                </small>
+              </div>
+              <div className="kpi-card kpi-card--accent">
+                <span>Estado del sistema</span>
+                <strong>
+                  {verStatus
+                    ? verStatus.updateAvailable
+                      ? 'Actualización lista'
+                      : 'Al día'
+                    : `Activo v${embeddedVer.version}`}
+                </strong>
+                <small>
+                  {verMandatory
+                    ? 'Modo obligatorio activado'
+                    : 'Actualización opcional'}
+                </small>
+              </div>
+            </div>
+
+            <form
+              className="settings-grid"
+              style={{ marginTop: 18 }}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setSavingVer(true);
+                try {
+                  const saved = await saveRemoteRelease({
+                    latest_version: verLatest,
+                    min_version: verMin,
+                    mandatory: verMandatory,
+                    title: verTitle,
+                    description: verDesc,
+                    features: verFeaturesText
+                      .split('\n')
+                      .map((l) => l.trim())
+                      .filter(Boolean),
+                  });
+                  showToast(`Versión v${saved.latest_version} publicada en la app.`);
+                  const nextStatus = await checkAppUpdate();
+                  setVerStatus(nextStatus);
+                } catch (err) {
+                  showToast(err instanceof Error ? err.message : 'Error guardando versión');
+                } finally {
+                  setSavingVer(false);
+                }
+              }}
+            >
+              <label className="field">
+                <span>Última versión publicada (semver)</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    type="text"
+                    required
+                    value={verLatest}
+                    onChange={(e) => setVerLatest(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => {
+                      const next = bumpSemver(verLatest, 'patch');
+                      setVerLatest(next);
+                      setVerMin(next);
+                    }}
+                  >
+                    +Patch
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => {
+                      const next = bumpSemver(verLatest, 'minor');
+                      setVerLatest(next);
+                      setVerMin(next);
+                    }}
+                  >
+                    +Minor
+                  </button>
+                </div>
+              </label>
+
+              <label className="field">
+                <span>Versión mínima obligatoria</span>
+                <input
+                  type="text"
+                  required
+                  value={verMin}
+                  onChange={(e) => setVerMin(e.target.value)}
+                />
+              </label>
+
+              <label className="field field--full">
+                <span>Política de actualización</span>
+                <span className="chk-label" style={{ paddingTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={verMandatory}
+                    onChange={(e) => setVerMandatory(e.target.checked)}
+                  />
+                  Obligatoria (muestra el modal bloqueante hasta que el cliente actualice)
+                </span>
+              </label>
+
+              <label className="field field--full">
+                <span>Título del modal</span>
+                <input
+                  type="text"
+                  required
+                  value={verTitle}
+                  onChange={(e) => setVerTitle(e.target.value)}
+                />
+              </label>
+
+              <label className="field field--full">
+                <span>Descripción</span>
+                <textarea
+                  rows={2}
+                  value={verDesc}
+                  onChange={(e) => setVerDesc(e.target.value)}
+                />
+              </label>
+
+              <label className="field field--full">
+                <span>Novedades y funciones nuevas (una por línea)</span>
+                <textarea
+                  rows={4}
+                  value={verFeaturesText}
+                  onChange={(e) => setVerFeaturesText(e.target.value)}
+                />
+              </label>
+
+              <div className="field--full">
+                <button type="submit" className="btn btn--primary" disabled={savingVer}>
+                  <Save size={15} />{' '}
+                  {savingVer ? 'Publicando...' : 'Publicar configuración de versión'}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
       </main>
+
+      <UpdateModal
+        open={previewUpdateModal}
+        previewMode
+        updateState={{
+          updateAvailable: true,
+          mandatory: verMandatory,
+          currentVersion: embeddedVer.version,
+          currentBuildId: embeddedVer.buildId,
+          targetVersion: verLatest || embeddedVer.version,
+          title: verTitle || '¡Actualización disponible!',
+          description:
+            verDesc ||
+            'Actualiza Yole Shop para cargar las nuevas funciones y el catálogo al día.',
+          features: verFeaturesText
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean),
+          source: 'remote-policy',
+          manifest: verStatus?.manifest ?? null,
+          remoteRelease: verStatus?.remoteRelease ?? null,
+        }}
+        onClosePreview={() => setPreviewUpdateModal(false)}
+      />
 
       {newOpen && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setNewOpen(false)}>

@@ -51,6 +51,8 @@ import { BottomMenuSheet } from './components/BottomMenuSheet';
 import { SmartImage } from './components/SmartImage';
 import { FilterSheet } from './components/FilterSheet';
 import { ContentGuard } from './components/ContentGuard';
+import { UpdateModal } from './components/UpdateModal';
+import { checkAppUpdate, type EvaluatedUpdateState } from './lib/versionManager';
 import {
   buildSearchLexicon,
   buildSearchSuggestions,
@@ -113,6 +115,8 @@ export function App() {
   const [favoriteSkus, setFavoriteSkus] = useState<string[]>(() => readFavoriteSkus());
   const [recentSkus, setRecentSkus] = useState<string[]>(() => readRecentSkus());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readThemeMode());
+  const [updateState, setUpdateState] = useState<EvaluatedUpdateState | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [sort, setSort] = useState<SortMode>('featured');
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('CUP');
@@ -148,6 +152,34 @@ export function App() {
     }
     writeThemeMode(themeMode);
   }, [themeMode]);
+
+  useEffect(() => {
+    if (import.meta.env.MODE === 'test') return;
+    let alive = true;
+    const runCheck = () => {
+      void checkAppUpdate().then((res) => {
+        if (!alive) return;
+        setUpdateState(res);
+        if (res.updateAvailable && res.mandatory) {
+          setUpdateDismissed(false);
+        }
+      });
+    };
+    runCheck();
+    const timer = window.setInterval(runCheck, 60_000);
+    const onFocus = () => runCheck();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') runCheck();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -589,6 +621,11 @@ export function App() {
             onBackToStore={() => navigateAdmin(false)}
           />
         </Suspense>
+        <UpdateModal
+          open={Boolean(updateState?.updateAvailable && (!updateDismissed || updateState.mandatory))}
+          updateState={updateState}
+          onClosePreview={() => setUpdateDismissed(true)}
+        />
       </>
     );
   }
@@ -1387,6 +1424,12 @@ export function App() {
         canPromptInstall={Boolean(installPrompt)}
         isInstalled={isInstalled}
         onInstallApp={handleInstallApp}
+      />
+
+      <UpdateModal
+        open={Boolean(updateState?.updateAvailable && (!updateDismissed || updateState.mandatory))}
+        updateState={updateState}
+        onClosePreview={() => setUpdateDismissed(true)}
       />
     </div>
   );

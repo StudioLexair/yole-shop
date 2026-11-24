@@ -111,6 +111,7 @@ describe('Yole Shop App', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.removeAttribute('data-theme');
+    window.history.replaceState(null, '', '/');
   });
 
   it('carga productos, cambia moneda y completa flujo de talla y carrito', async () => {

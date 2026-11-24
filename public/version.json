@@ -1,0 +1,13 @@
+{
+  "version": "1.1.0",
+  "buildId": "local",
+  "releasedAt": "2026-11-24T15:00:00Z",
+  "mandatory": true,
+  "title": "¡Actualización disponible!",
+  "description": "Actualiza Yole Shop para cargar las nuevas funciones, diseño mejorado y catálogo al día.",
+  "features": [
+    "Nuevo emblema oficial Yole Shop con mejoras visuales",
+    "Modo oscuro y claro corregido al 100% en tienda y panel",
+    "Sistema automático de versiones para recibir mejoras al instante"
+  ]
+}

@@ -4998,6 +4998,332 @@ select,
   color: var(--ink);
 }
 
+/* ==================== VERSION MANAGER & MANDATORY UPDATE MODAL ==================== */
+.version-admin-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .version-admin-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.yole-update-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(9, 9, 11, 0.78);
+  backdrop-filter: blur(10px);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  animation: yoleUpdateFade 0.22s ease both;
+}
+
+@keyframes yoleUpdateFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.yole-update-modal {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: #ffffff;
+  color: #0a0a0a;
+  border: 1px solid #e5e5e5;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.42);
+  animation: yoleUpdatePop 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes yoleUpdatePop {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.yole-update-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(9, 9, 11, 0.55);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.yole-update-hero {
+  position: relative;
+  padding: 26px 22px 20px;
+  background: linear-gradient(155deg, #09090b 0%, #18181b 65%, #27150d 100%);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.yole-update-glow {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  top: -70px;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.34) 0%, rgba(239, 68, 68, 0.14) 45%, transparent 72%);
+  pointer-events: none;
+}
+
+.yole-update-emblem {
+  position: relative;
+  z-index: 2;
+  width: 80px;
+  height: 80px;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #000000;
+  border: 2px solid rgba(249, 115, 22, 0.55);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 0 0 6px rgba(249, 115, 22, 0.12);
+}
+
+.yole-update-emblem img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.yole-update-badges {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.yole-update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.18);
+  border: 1px solid rgba(251, 146, 60, 0.45);
+  color: #fdba74;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.yole-update-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #f97316;
+  box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+  animation: yoleUpdatePulse 1.6s infinite;
+}
+
+@keyframes yoleUpdatePulse {
+  0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.65); }
+  70% { box-shadow: 0 0 0 7px rgba(249, 115, 22, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+}
+
+.yole-update-ver {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f4f4f5;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.yole-update-body {
+  padding: 20px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.yole-update-body h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.yole-update-desc {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #52525b;
+  text-align: center;
+}
+
+.yole-update-features-box {
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.yole-update-features-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+  margin-bottom: 9px;
+}
+
+.yole-update-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.yole-update-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.38;
+  color: #18181b;
+}
+
+.yole-update-check {
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.yole-update-cta {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1c1917 100%);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  transition: transform 0.14s ease, opacity 0.14s ease;
+}
+
+.yole-update-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.yole-update-cta:disabled {
+  opacity: 0.78;
+  cursor: wait;
+}
+
+.yole-update-cta .is-spinning {
+  animation: yoleSpin 0.85s linear infinite;
+}
+
+@keyframes yoleSpin {
+  to { transform: rotate(360deg); }
+}
+
+.yole-update-skip {
+  border: 1px solid #e4e4e7;
+  background: transparent;
+  color: #52525b;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.yole-update-lock-note {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #71717a;
+  text-align: center;
+  line-height: 1.4;
+}
+
+:root[data-theme='dark'] .yole-update-modal {
+  background: #121215;
+  color: #f4f4f5;
+  border-color: #27272a;
+}
+
+:root[data-theme='dark'] .yole-update-body h2 {
+  color: #fafafa;
+}
+
+:root[data-theme='dark'] .yole-update-desc,
+:root[data-theme='dark'] .yole-update-lock-note {
+  color: #a1a1aa;
+}
+
+:root[data-theme='dark'] .yole-update-features-box {
+  background: #18181b;
+  border-color: #27272a;
+}
+
+:root[data-theme='dark'] .yole-update-features-head {
+  color: #a1a1aa;
+}
+
+:root[data-theme='dark'] .yole-update-features li {
+  color: #f4f4f5;
+}
+
+:root[data-theme='dark'] .yole-update-cta {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 26px rgba(234, 88, 12, 0.32);
+}
+
+:root[data-theme='dark'] .yole-update-skip {
+  border-color: #27272a;
+  color: #a1a1aa;
+}
+
+
 
 
 

@@ -123,6 +123,18 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   show_sold_out_public: false,
 };
 
+export interface AppRelease {
+  id: string;
+  latest_version: string;
+  min_version: string;
+  mandatory: boolean;
+  title: string;
+  description: string;
+  features: string[];
+  released_at?: string;
+  updated_at?: string;
+}
+
 export const DEPARTMENT_LABELS: Record<Department, string> = {
   calzado: 'Calzado & Tenis',
   moda_shein: 'Moda Shein',
