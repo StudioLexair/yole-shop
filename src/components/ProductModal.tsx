@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import {
+  BellRing,
   Check,
   ChevronLeft,
   ChevronRight,
   Download,
+  Film,
   Heart,
   Maximize2,
   MessageCircle,
@@ -13,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
 import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
-import { getAvailableSizes } from '../lib/catalog';
+import { getAvailableSizes, submitSizeRequest } from '../lib/catalog';
 import { downloadRemoteImage, shareProductLink } from '../lib/mediaHelpers';
 import { SmartImage } from './SmartImage';
 
@@ -25,7 +27,10 @@ interface ProductModalProps {
   onToggleFavorite?: (sku: string) => void;
   onClose: () => void;
   onAddToCart: (product: Product, size: string) => void;
+  onWhatsAppClick?: (product: Product) => void;
 }
+
+type MediaSlide = { type: 'image' | 'video'; url: string };
 
 export function ProductModal({
   product,
@@ -35,6 +40,7 @@ export function ProductModal({
   onToggleFavorite,
   onClose,
   onAddToCart,
+  onWhatsAppClick,
 }: ProductModalProps) {
   const allSizes = product.sizes.length > 0 ? product.sizes : ['Única'];
   const soldOutSet = useMemo(
@@ -50,15 +56,29 @@ export function ProductModal({
   const [downloading, setDownloading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  const gallery = useMemo(
-    () =>
-      [product.image_url, ...(product.extra_images || [])].filter(
-        (u, idx, arr) => Boolean(u) && arr.indexOf(u) === idx
-      ),
-    [product.image_url, product.extra_images]
-  );
+  // Solicitud "Encarga tu talla o modelo"
+  const [reqOpen, setReqOpen] = useState(false);
+  const [reqSize, setReqSize] = useState(allSizes.find((s) => soldOutSet.has(s)) || '');
+  const [reqName, setReqName] = useState('');
+  const [reqPhone, setReqPhone] = useState('');
+  const [reqNote, setReqNote] = useState('');
+  const [reqSaving, setReqSaving] = useState(false);
+  const [reqSent, setReqSent] = useState(false);
+  const [reqErr, setReqErr] = useState('');
+
+  const mediaSlides = useMemo<MediaSlide[]>(() => {
+    const imgs = [product.image_url, ...(product.extra_images || [])].filter(
+      (u, idx, arr) => Boolean(u) && arr.indexOf(u) === idx
+    );
+    const list: MediaSlide[] = imgs.map((url) => ({ type: 'image', url }));
+    if (product.video_url && product.video_url.trim()) {
+      list.push({ type: 'video', url: product.video_url.trim() });
+    }
+    return list;
+  }, [product.image_url, product.extra_images, product.video_url]);
+
   const [photoIdx, setPhotoIdx] = useState(0);
-  const activePhoto = gallery[photoIdx] || product.image_url;
+  const activeSlide = mediaSlides[photoIdx] || { type: 'image' as const, url: product.image_url };
 
   const priceInfo = getDisplayPrice(product, displayCurrency, settings.usd_to_cup_rate);
   const waUrl = buildWhatsAppProductLink(product, selectedSize, settings);
@@ -86,10 +106,41 @@ export function ProductModal({
   const handleDownloadPhoto = async () => {
     setDownloading(true);
     try {
+      const targetUrl = activeSlide.type === 'image' ? activeSlide.url : product.image_url;
       const suffix = photoIdx > 0 ? `-${photoIdx + 1}` : '';
-      await downloadRemoteImage(activePhoto, `${product.sku}${suffix}.webp`);
+      await downloadRemoteImage(targetUrl, `${product.sku}${suffix}.webp`);
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleSizeRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReqErr('');
+    if (!reqSize.trim()) {
+      setReqErr('Indica la talla o variante que necesitas.');
+      return;
+    }
+    if (reqPhone.trim().length < 6) {
+      setReqErr('Escribe tu número de WhatsApp para avisarte.');
+      return;
+    }
+    setReqSaving(true);
+    try {
+      await submitSizeRequest({
+        sku: product.sku,
+        product_title: product.title,
+        requested_size: reqSize.trim(),
+        customer_name: reqName.trim(),
+        customer_whatsapp: reqPhone.trim(),
+        note: reqNote.trim(),
+      });
+      setReqSent(true);
+      setReqNote('');
+    } catch {
+      setReqErr('No pudimos guardar la solicitud ahora. Intenta nuevamente.');
+    } finally {
+      setReqSaving(false);
     }
   };
 
@@ -113,33 +164,47 @@ export function ProductModal({
           <div className="modal-grid">
             <div className="modal-media-wrap">
               <div className="modal-media">
-                <SmartImage
-                  src={activePhoto}
-                  alt={product.title}
-                  loading="eager"
-                  fetchPriority="high"
-                  variant="card"
-                  showRetryOnError
-                  onClick={() => setLightboxOpen(true)}
-                  title="Toca para ampliar en pantalla completa"
-                  style={{ cursor: 'zoom-in' }}
-                />
-                <button
-                  type="button"
-                  className="modal-zoom-btn"
-                  aria-label="Ampliar foto en pantalla completa"
-                  onClick={() => setLightboxOpen(true)}
-                >
-                  <Maximize2 size={15} />
-                </button>
-                {gallery.length > 1 && (
+                {activeSlide.type === 'video' ? (
+                  <video
+                    src={activeSlide.url}
+                    controls
+                    playsInline
+                    loop
+                    muted
+                    autoPlay
+                    className="modal-video-player"
+                  />
+                ) : (
+                  <>
+                    <SmartImage
+                      src={activeSlide.url}
+                      alt={product.title}
+                      loading="eager"
+                      fetchPriority="high"
+                      variant="card"
+                      showRetryOnError
+                      onClick={() => setLightboxOpen(true)}
+                      title="Toca para ampliar en pantalla completa"
+                      style={{ cursor: 'zoom-in' }}
+                    />
+                    <button
+                      type="button"
+                      className="modal-zoom-btn"
+                      aria-label="Ampliar foto en pantalla completa"
+                      onClick={() => setLightboxOpen(true)}
+                    >
+                      <Maximize2 size={15} />
+                    </button>
+                  </>
+                )}
+                {mediaSlides.length > 1 && (
                   <>
                     <button
                       type="button"
                       className="modal-gal-arrow is-prev"
                       aria-label="Foto anterior"
                       onClick={() =>
-                        setPhotoIdx((i) => (i - 1 + gallery.length) % gallery.length)
+                        setPhotoIdx((i) => (i - 1 + mediaSlides.length) % mediaSlides.length)
                       }
                     >
                       <ChevronLeft size={18} />
@@ -148,32 +213,38 @@ export function ProductModal({
                       type="button"
                       className="modal-gal-arrow is-next"
                       aria-label="Siguiente foto"
-                      onClick={() => setPhotoIdx((i) => (i + 1) % gallery.length)}
+                      onClick={() => setPhotoIdx((i) => (i + 1) % mediaSlides.length)}
                     >
                       <ChevronRight size={18} />
                     </button>
                     <span className="modal-gal-count">
-                      {photoIdx + 1}/{gallery.length}
+                      {photoIdx + 1}/{mediaSlides.length}
                     </span>
                   </>
                 )}
               </div>
 
-              {gallery.length > 1 && (
-                <div className="modal-thumbs" role="tablist" aria-label="Galería de fotos">
-                  {gallery.map((url, idx) => (
+              {mediaSlides.length > 1 && (
+                <div className="modal-thumbs" role="tablist" aria-label="Galería multimedia">
+                  {mediaSlides.map((slide, idx) => (
                     <button
-                      key={url}
+                      key={`${slide.type}-${slide.url}-${idx}`}
                       type="button"
                       className={`modal-thumb${idx === photoIdx ? ' is-active' : ''}`}
                       onClick={() => setPhotoIdx(idx)}
-                      aria-label={`Ver foto ${idx + 1}`}
+                      aria-label={slide.type === 'video' ? 'Ver video lookbook' : `Ver foto ${idx + 1}`}
                     >
-                      <SmartImage
-                        src={url}
-                        alt={`${product.title} vista ${idx + 1}`}
-                        variant="compact"
-                      />
+                      {slide.type === 'video' ? (
+                        <span className="modal-thumb__video">
+                          <Film size={16} />
+                        </span>
+                      ) : (
+                        <SmartImage
+                          src={slide.url}
+                          alt={`${product.title} vista ${idx + 1}`}
+                          variant="compact"
+                        />
+                      )}
                     </button>
                   ))}
                 </div>
@@ -234,7 +305,71 @@ export function ProductModal({
                     );
                   })}
                 </div>
+
+                <button
+                  type="button"
+                  className="size-request-trigger"
+                  onClick={() => {
+                    setReqOpen((prev) => !prev);
+                    setReqSent(false);
+                  }}
+                >
+                  <BellRing size={14} />
+                  <span>¿No está tu talla o está agotado? Encárganosla</span>
+                </button>
               </div>
+
+              {reqOpen && (
+                <form className="size-request-box" onSubmit={handleSizeRequestSubmit}>
+                  {reqSent ? (
+                    <p className="form-ok">
+                      ¡Solicitud recibida! Te avisaremos por WhatsApp en cuanto entre talla{' '}
+                      <strong>{reqSize}</strong>.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="size-request-grid">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Talla deseada (ej. 42, M)"
+                          value={reqSize}
+                          onChange={(e) => setReqSize(e.target.value)}
+                        />
+                        <input
+                          type="tel"
+                          required
+                          placeholder="Tu WhatsApp *"
+                          value={reqPhone}
+                          onChange={(e) => setReqPhone(e.target.value)}
+                        />
+                      </div>
+                      <div className="size-request-grid">
+                        <input
+                          type="text"
+                          placeholder="Tu nombre (opcional)"
+                          value={reqName}
+                          onChange={(e) => setReqName(e.target.value)}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Nota / color (opcional)"
+                          value={reqNote}
+                          onChange={(e) => setReqNote(e.target.value)}
+                        />
+                      </div>
+                      {reqErr && <p className="form-error">{reqErr}</p>}
+                      <button
+                        type="submit"
+                        className="btn btn--primary btn--sm"
+                        disabled={reqSaving}
+                      >
+                        {reqSaving ? 'Enviando solicitud...' : 'Enviar solicitud de talla'}
+                      </button>
+                    </>
+                  )}
+                </form>
+              )}
 
               <div className="modal-utility-row">
                 {onToggleFavorite && (
@@ -254,57 +389,44 @@ export function ProductModal({
                 <button
                   type="button"
                   className="btn-util"
-                  disabled={downloading}
                   onClick={handleDownloadPhoto}
+                  disabled={downloading}
                 >
                   <Download size={15} />
-                  <span>{downloading ? 'Bajando...' : 'Descargar foto'}</span>
+                  <span>{downloading ? 'Descargando...' : 'Descargar foto'}</span>
                 </button>
               </div>
 
-              <p className="modal-policy" style={{ marginBottom: 14 }}>
-                {settings.no_returns_notice}
-              </p>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn--primary btn--lg"
+                  disabled={isSoldOut}
+                  onClick={handleAdd}
+                >
+                  {added ? <Check size={18} /> : <ShoppingBag size={18} />}
+                  <span>{added ? '¡Agregado!' : 'Agregar al carrito'}</span>
+                </button>
 
-              <div className="modal-sticky-footer">
-                <div className="modal-sticky-price">
-                  <strong>{priceInfo.primary}</strong>
-                  {priceInfo.secondary && <small>{priceInfo.secondary}</small>}
-                </div>
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    disabled={isSoldOut}
-                    onClick={handleAdd}
-                  >
-                    {added ? <Check size={18} /> : <ShoppingBag size={18} />}
-                    <span>
-                      {isSoldOut
-                        ? 'Producto agotado'
-                        : added
-                          ? 'Agregado al carrito'
-                          : 'Agregar al carrito'}
-                    </span>
-                  </button>
-
-                  <a
-                    href={waUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn--whatsapp"
-                  >
-                    <MessageCircle size={18} />
-                    <span>Pedir por WhatsApp</span>
-                  </a>
-                </div>
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn--whatsapp btn--lg"
+                  onClick={() => onWhatsAppClick?.(product)}
+                >
+                  <MessageCircle size={18} />
+                  <span>Preguntar por WhatsApp</span>
+                </a>
               </div>
+
+              <p className="modal-disclaimer">{settings.no_returns_notice}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {lightboxOpen && (
+      {lightboxOpen && activeSlide.type === 'image' && (
         <div
           className="lightbox-backdrop"
           role="dialog"
@@ -312,60 +434,50 @@ export function ProductModal({
           aria-label={`Foto ampliada de ${product.title}`}
           onClick={() => setLightboxOpen(false)}
         >
-          <div className="lightbox-top" onClick={(e) => e.stopPropagation()}>
-            <span>
-              {product.sku} · {photoIdx + 1}/{gallery.length}
-            </span>
-            <div className="lightbox-top__btns">
-              <button
-                type="button"
-                className="lightbox-btn"
-                onClick={handleDownloadPhoto}
-                aria-label="Descargar foto ampliada"
-              >
-                <Download size={18} />
-              </button>
-              <button
-                type="button"
-                className="lightbox-btn"
-                onClick={() => setLightboxOpen(false)}
-                aria-label="Cerrar vista ampliada"
-              >
-                <X size={20} />
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            className="lightbox-close"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Cerrar vista ampliada"
+          >
+            <X size={24} />
+          </button>
 
-          <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
-            {gallery.length > 1 && (
+          {mediaSlides.filter((s) => s.type === 'image').length > 1 && (
+            <>
               <button
                 type="button"
                 className="lightbox-arrow is-prev"
                 aria-label="Foto anterior"
-                onClick={() =>
-                  setPhotoIdx((i) => (i - 1 + gallery.length) % gallery.length)
-                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPhotoIdx((i) => (i - 1 + mediaSlides.length) % mediaSlides.length);
+                }}
               >
-                <ChevronLeft size={24} />
+                <ChevronLeft size={26} />
               </button>
-            )}
-            <SmartImage
-              src={activePhoto}
-              alt={product.title}
-              loading="eager"
-              variant="lightbox"
-              showRetryOnError
-            />
-            {gallery.length > 1 && (
               <button
                 type="button"
                 className="lightbox-arrow is-next"
                 aria-label="Siguiente foto"
-                onClick={() => setPhotoIdx((i) => (i + 1) % gallery.length)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPhotoIdx((i) => (i + 1) % mediaSlides.length);
+                }}
               >
-                <ChevronRight size={24} />
+                <ChevronRight size={26} />
               </button>
-            )}
+            </>
+          )}
+
+          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <img src={activeSlide.url} alt={product.title} className="lightbox-img" />
+            <div className="lightbox-caption">
+              <strong>{product.title}</strong>
+              <span>
+                {product.sku} · {priceInfo.primary}
+              </span>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Eye, Heart, Images, MessageCircle, ShoppingBag } from 'lucide-react';
+import { Eye, Film, Heart, Images, MessageCircle, ShoppingBag } from 'lucide-react';
 import type { Currency, Product, StoreSettings } from '../types';
 import { buildWhatsAppProductLink, getDisplayPrice } from '../lib/pricing';
 import { getAvailableSizes } from '../lib/catalog';
@@ -116,6 +116,11 @@ export function ProductCard({
           {totalPhotos > 1 && (
             <span className="p-badge p-badge--photos" title={`${totalPhotos} fotos disponibles`}>
               <Images size={11} /> {totalPhotos}
+            </span>
+          )}
+          {Boolean(product.video_url) && (
+            <span className="p-badge p-badge--video" title="Incluye video lookbook">
+              <Film size={11} /> Video
             </span>
           )}
         </div>

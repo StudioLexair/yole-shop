@@ -325,4 +325,30 @@ describe('Yole Shop App', () => {
     expect(screen.getByText(/\+266 Artículos/i)).toBeInTheDocument();
     expect(screen.getByText(/Santa Clara · Edición Oficial/i)).toBeInTheDocument();
   });
+
+  it('muestra Drop Flash Recién Llegados, Seguimiento QR de pedidos y solicitud de talla agotada', async () => {
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+    });
+
+    // Drop Flash banner visible y botón "Ver recién llegados" funciona
+    expect(screen.getByLabelText('Recién llegados y ofertas flash')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Ver recién llegados/i }));
+    expect(screen.getByRole('button', { name: /Viendo recién llegados/i })).toBeInTheDocument();
+
+    // Abrir Seguimiento de pedido desde el Hero
+    fireEvent.click(screen.getByRole('button', { name: /Seguir pedido/i }));
+    const trackerDialog = screen.getByRole('dialog', { name: 'Seguimiento de pedido' });
+    expect(within(trackerDialog).getByPlaceholderText(/YOL-ORD-1042/i)).toBeInTheDocument();
+    fireEvent.click(within(trackerDialog).getByRole('button', { name: 'Cerrar seguimiento' }));
+
+    // En ficha de producto aparece el formulario "¿No está tu talla o está agotado? Encárganosla"
+    fireEvent.click(screen.getByText('New Balance 9060 Blanco & Rosa'));
+    const prodDialog = screen.getByRole('dialog');
+    fireEvent.click(
+      within(prodDialog).getByRole('button', { name: /No está tu talla o está agotado/i })
+    );
+    expect(within(prodDialog).getByRole('button', { name: /Enviar solicitud de talla/i })).toBeInTheDocument();
+  });
 });

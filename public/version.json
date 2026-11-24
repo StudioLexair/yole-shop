@@ -1,13 +1,13 @@
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "buildId": "local",
-  "releasedAt": "2026-11-24T15:10:00Z",
-  "mandatory": true,
+  "releasedAt": "2026-11-24T16:15:00Z",
+  "mandatory": false,
   "title": "¡Actualización disponible!",
-  "description": "Actualiza Yole Shop para cargar la nueva presentación de inicio, el icono oficial del lobo en pestaña y los precios actualizados.",
+  "description": "Nuevas funciones en Yole Shop: Seguimiento de pedido con QR, encargo de tallas, cupones VIP, galería multi-foto/video y Drop Flash.",
   "features": [
-    "Nueva pantalla de presentación Yole Shop (4.5s)",
-    "Icono oficial del lobo en la pestaña y PWA",
-    "Precios actualizados en relojes y audífonos"
+    "Seguimiento de pedido con código QR",
+    "Solicitudes de talla y Drop Recién Llegados",
+    "Cupones VIP y galería multi-foto/video"
   ]
 }

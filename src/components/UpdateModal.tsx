@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, RefreshCw, ShieldCheck, Sparkles, X } from 'lucide-react';
-import { applyForcedAppUpdate, type EvaluatedUpdateState } from '../lib/versionManager';
+import { ArrowRight, Check, RefreshCw, Sparkles, X } from 'lucide-react';
+import {
+  applyForcedAppUpdate,
+  markUpdateDismissed,
+  type EvaluatedUpdateState,
+} from '../lib/versionManager';
 
 interface UpdateModalProps {
   open: boolean;
@@ -17,21 +21,17 @@ export function UpdateModal({
 }: UpdateModalProps) {
   const [updating, setUpdating] = useState(false);
 
-  const mandatory = Boolean(updateState?.mandatory ?? true);
-  const canDismiss = previewMode || !mandatory;
-
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (canDismiss && !updating && onClosePreview) {
-          onClosePreview();
-        } else {
-          e.preventDefault();
+      if (e.key === 'Escape' && !updating && onClosePreview) {
+        if (!previewMode && updateState?.targetVersion) {
+          markUpdateDismissed(updateState.targetVersion);
         }
+        onClosePreview();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -39,9 +39,17 @@ export function UpdateModal({
       document.body.style.overflow = prevOverflow;
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, canDismiss, updating, onClosePreview]);
+  }, [open, updating, onClosePreview, previewMode, updateState?.targetVersion]);
 
   if (!open || !updateState) return null;
+
+  const handleClose = () => {
+    if (updating) return;
+    if (!previewMode && updateState.targetVersion) {
+      markUpdateDismissed(updateState.targetVersion);
+    }
+    onClosePreview?.();
+  };
 
   const handleUpdate = async () => {
     setUpdating(true);
@@ -53,9 +61,7 @@ export function UpdateModal({
       className="yole-update-backdrop"
       role="presentation"
       onClick={(e) => {
-        if (e.target === e.currentTarget && canDismiss && !updating && onClosePreview) {
-          onClosePreview();
-        }
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <section
@@ -65,17 +71,15 @@ export function UpdateModal({
         aria-labelledby="yole-update-title"
         aria-describedby="yole-update-desc"
       >
-        {canDismiss && onClosePreview && (
-          <button
-            type="button"
-            className="yole-update-close"
-            onClick={onClosePreview}
-            disabled={updating}
-            aria-label="Cerrar vista previa"
-          >
-            <X size={18} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="yole-update-close"
+          onClick={handleClose}
+          disabled={updating}
+          aria-label="Cerrar aviso de actualización"
+        >
+          <X size={18} />
+        </button>
 
         <div className="yole-update-hero">
           <div className="yole-update-glow" aria-hidden="true" />
@@ -85,7 +89,7 @@ export function UpdateModal({
           <div className="yole-update-badges">
             <span className="yole-update-pill">
               <span className="yole-update-dot" aria-hidden="true" />
-              {mandatory ? 'Actualización obligatoria' : 'Nueva versión lista'}
+              Nueva versión lista
             </span>
             <span className="yole-update-ver">
               v{updateState.currentVersion} → v{updateState.targetVersion}
@@ -126,28 +130,19 @@ export function UpdateModal({
             <span>
               {updating
                 ? 'Descargando nueva versión...'
-                : 'Actualizar ahora para continuar'}
+                : 'Actualizar ahora'}
             </span>
             {!updating && <ArrowRight size={17} />}
           </button>
 
-          {canDismiss && onClosePreview ? (
-            <button
-              type="button"
-              className="yole-update-skip"
-              disabled={updating}
-              onClick={onClosePreview}
-            >
-              {previewMode ? 'Cerrar vista previa' : 'Recordar más tarde'}
-            </button>
-          ) : (
-            <p className="yole-update-lock-note">
-              <ShieldCheck size={14} />
-              <span>
-                Actualización necesaria para cargar las nuevas funciones sin perder tu carrito ni tus favoritos.
-              </span>
-            </p>
-          )}
+          <button
+            type="button"
+            className="yole-update-skip"
+            disabled={updating}
+            onClick={handleClose}
+          >
+            {previewMode ? 'Cerrar vista previa' : 'Más tarde'}
+          </button>
         </div>
       </section>
     </div>

@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
+  BarChart3,
+  BellRing,
   Check,
   Copy,
   Download,
+  FileText,
+  Film,
   ImageDown,
   ImagePlus,
   Layers,
@@ -21,6 +25,7 @@ import {
   ShoppingCart,
   Sparkles,
   Sun,
+  Tag,
   Trash2,
   X,
   Zap,
@@ -50,6 +55,7 @@ import { formatKb, optimizeImageToWebP } from '../lib/imageOptimizer';
 import {
   downloadRemoteImage,
   generateWhatsAppStatusCard,
+  openPrintableCatalogPdf,
 } from '../lib/mediaHelpers';
 import {
   applyPresetToLinkedProducts,
@@ -63,10 +69,16 @@ import {
   saveProduct,
   saveStoreSettings,
   updateOrderStatus,
+  uploadProductVideo,
   uploadProductWebP,
   writeThemeMode,
   type ThemeMode,
 } from '../lib/catalog';
+import {
+  AdminAnalyticsTab,
+  AdminCouponsTab,
+  AdminRequestsTab,
+} from './AdminExtraTabs';
 import {
   bumpSemver,
   checkAppUpdate,
@@ -88,7 +100,16 @@ interface AdminViewProps {
   onBackToStore: () => void;
 }
 
-type AdminTab = 'products' | 'presets' | 'orders' | 'settings' | 'version' | 'security';
+type AdminTab =
+  | 'products'
+  | 'presets'
+  | 'orders'
+  | 'requests'
+  | 'coupons'
+  | 'analytics'
+  | 'settings'
+  | 'version'
+  | 'security';
 type QuickFilter =
   | 'all'
   | 'unpriced'
@@ -238,7 +259,7 @@ export function AdminView({
   const [verChecking, setVerChecking] = useState(false);
   const [verLatest, setVerLatest] = useState(embeddedVer.version);
   const [verMin, setVerMin] = useState(embeddedVer.version);
-  const [verMandatory, setVerMandatory] = useState(true);
+  const [verMandatory, setVerMandatory] = useState(false);
   const [verTitle, setVerTitle] = useState('¡Actualización disponible!');
   const [verDesc, setVerDesc] = useState(
     'Actualiza Yole Shop para cargar las nuevas funciones, diseño mejorado y catálogo al día.'
@@ -823,6 +844,30 @@ export function AdminView({
     }
   };
 
+  const handleRowVideoUpload = async (p: Product, file: File) => {
+    setUploadingId(p.id);
+    try {
+      const videoUrl = await uploadProductVideo(p.sku, file);
+      await saveProduct({ ...p, video_url: videoUrl });
+      await onRefresh();
+      showToast(`Video lookbook cargado en ${p.sku}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo subir el video');
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  const handleRemoveVideo = async (p: Product) => {
+    try {
+      await saveProduct({ ...p, video_url: '' });
+      await onRefresh();
+      showToast(`Video quitado de ${p.sku}`);
+    } catch {
+      showToast('No se pudo quitar el video');
+    }
+  };
+
   const toggleRowSoldOutSize = (p: Product, sz: string) => {
     const d = drafts[p.id] || makeDraft(p);
     const exists = d.soldOutSizes.includes(sz);
@@ -1208,6 +1253,27 @@ export function AdminView({
           </button>
           <button
             type="button"
+            className={tab === 'requests' ? 'is-active' : ''}
+            onClick={() => setTab('requests')}
+          >
+            <BellRing size={16} /> Solicitudes
+          </button>
+          <button
+            type="button"
+            className={tab === 'coupons' ? 'is-active' : ''}
+            onClick={() => setTab('coupons')}
+          >
+            <Tag size={16} /> Cupones VIP
+          </button>
+          <button
+            type="button"
+            className={tab === 'analytics' ? 'is-active' : ''}
+            onClick={() => setTab('analytics')}
+          >
+            <BarChart3 size={16} /> Analítica
+          </button>
+          <button
+            type="button"
             className={tab === 'settings' ? 'is-active' : ''}
             onClick={() => setTab('settings')}
           >
@@ -1553,6 +1619,19 @@ export function AdminView({
                   ))}
                 </select>
 
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => {
+                    try {
+                      openPrintableCatalogPdf(filteredProducts, cfg);
+                    } catch (err) {
+                      showToast(err instanceof Error ? err.message : 'Error generando catálogo PDF');
+                    }
+                  }}
+                >
+                  <FileText size={16} /> Catálogo PDF
+                </button>
                 <button type="button" className="btn-outline" onClick={handleExportCsv}>
                   <Download size={16} /> CSV
                 </button>
@@ -1793,6 +1872,29 @@ export function AdminView({
                                     }}
                                   />
                                 </label>
+                                <label className="upload-mini-btn" title="Subir clip corto MP4/WebM (Vista 360° / Lookbook)">
+                                  <Film size={12} />
+                                  <span>{p.video_url ? 'Cambiar video' : 'Video'}</span>
+                                  <input
+                                    type="file"
+                                    accept="video/mp4,video/webm,video/quicktime"
+                                    hidden
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleRowVideoUpload(p, f);
+                                    }}
+                                  />
+                                </label>
+                                {p.video_url && (
+                                  <button
+                                    type="button"
+                                    className="upload-mini-btn"
+                                    onClick={() => handleRemoveVideo(p)}
+                                    title="Quitar video"
+                                  >
+                                    <X size={11} /> Video
+                                  </button>
+                                )}
                               </div>
                               {d.extraImages.length > 0 && (
                                 <div className="tbl-extra-thumbs">
@@ -2069,20 +2171,29 @@ export function AdminView({
                         <strong>{ord.order_code} · {ord.customer_name}</strong>
                         <span>
                           {new Date(ord.created_at).toLocaleString('es-ES')} · {ord.delivery_type === 'domicilio' ? `Domicilio (${ord.delivery_address})` : 'Recogida'}
+                          {ord.discount_code ? ` · Cupón ${ord.discount_code}` : ''}
                         </span>
                       </div>
-                      <select
-                        className={`tbl-select status-sel status-sel--${ord.status}`}
-                        value={ord.status}
-                        onChange={(e) =>
-                          handleOrderStatus(ord.id, e.target.value as OrderStatus)
-                        }
-                      >
-                        <option value="nuevo">Nuevo</option>
-                        <option value="confirmado">Confirmado</option>
-                        <option value="entregado">Entregado</option>
-                        <option value="cancelado">Cancelado</option>
-                      </select>
+                      <div className="order-quick-pills">
+                        {(
+                          [
+                            ['nuevo', 'Pendiente'],
+                            ['confirmado', 'Confirmado'],
+                            ['en_reparto', 'En reparto'],
+                            ['entregado', 'Entregado'],
+                            ['cancelado', 'Cancelado'],
+                          ] as Array<[OrderStatus, string]>
+                        ).map(([stKey, stLabel]) => (
+                          <button
+                            key={stKey}
+                            type="button"
+                            className={`chip chip--sm${ord.status === stKey ? ' is-active' : ''}`}
+                            onClick={() => handleOrderStatus(ord.id, stKey)}
+                          >
+                            {stLabel}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <ul className="order-items">
@@ -2133,6 +2244,17 @@ export function AdminView({
                         {ord.notes && <span>Nota: {ord.notes}</span>}
                       </div>
                       <div className="order-card__actions">
+                        <button
+                          type="button"
+                          className="btn-outline"
+                          onClick={() => {
+                            const url = `https://yoleshop.ddns.net/?track=${encodeURIComponent(ord.order_code)}`;
+                            void navigator.clipboard?.writeText(url);
+                            showToast(`Enlace de seguimiento QR copiado: ${url}`);
+                          }}
+                        >
+                          <Copy size={14} /> Link tracking
+                        </button>
                         <button
                           type="button"
                           className="btn-outline"
@@ -2232,6 +2354,14 @@ export function AdminView({
             )}
           </section>
         )}
+
+        {tab === 'requests' && (
+          <AdminRequestsTab settings={cfg} onToast={showToast} />
+        )}
+
+        {tab === 'coupons' && <AdminCouponsTab onToast={showToast} />}
+
+        {tab === 'analytics' && <AdminAnalyticsTab onToast={showToast} />}
 
         {tab === 'settings' && (
           <section className="admin-panel">
@@ -2356,6 +2486,62 @@ export function AdminView({
                 <span>Mostrar artículos agotados en el catálogo público (con etiqueta Agotado)</span>
               </label>
 
+              <div className="field--full admin-subsection-head">
+                <strong>Modo &quot;Recién Llegados&quot; &amp; Drop Flash</strong>
+                <small>Banner superior con cuenta regresiva para drops y lanzamientos de la semana.</small>
+              </div>
+              <label className="chk-inline field--full">
+                <input
+                  type="checkbox"
+                  checked={cfg.flash_enabled !== false}
+                  onChange={(e) => setCfg({ ...cfg, flash_enabled: e.target.checked })}
+                />
+                <span>Mostrar banner de Drop Flash / Recién Llegados en la tienda</span>
+              </label>
+              <label className="field">
+                <span>Etiqueta Drop</span>
+                <input
+                  type="text"
+                  value={cfg.flash_badge || ''}
+                  onChange={(e) => setCfg({ ...cfg, flash_badge: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                <span>Fecha/Hora fin del temporizador</span>
+                <input
+                  type="datetime-local"
+                  value={
+                    cfg.flash_ends_at
+                      ? new Date(cfg.flash_ends_at).toISOString().slice(0, 16)
+                      : ''
+                  }
+                  onChange={(e) =>
+                    setCfg({
+                      ...cfg,
+                      flash_ends_at: e.target.value
+                        ? new Date(e.target.value).toISOString()
+                        : null,
+                    })
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Título del Drop</span>
+                <input
+                  type="text"
+                  value={cfg.flash_title || ''}
+                  onChange={(e) => setCfg({ ...cfg, flash_title: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                <span>Subtítulo del Drop</span>
+                <input
+                  type="text"
+                  value={cfg.flash_subtitle || ''}
+                  onChange={(e) => setCfg({ ...cfg, flash_subtitle: e.target.value })}
+                />
+              </label>
+
               <div className="field--full">
                 <button type="submit" className="btn btn--primary" disabled={savingCfg}>
                   <Save size={16} />
@@ -2404,7 +2590,7 @@ export function AdminView({
               <div>
                 <h2>Manager de Versiones y Actualizaciones</h2>
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
-                  Publica versiones nuevas y controla el modal obligatorio dentro de la app para todos los usuarios.
+                  Publica versiones nuevas y controla los avisos de actualización dentro de la app para todos los usuarios.
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

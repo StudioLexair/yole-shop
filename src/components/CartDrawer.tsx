@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react';
-import { MessageCircle, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  MessageCircle,
+  Minus,
+  Package,
+  Plus,
+  ShoppingBag,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react';
 import type {
   CartItem,
+  Coupon,
   DeliveryType,
   PaymentMethod,
   StoreSettings,
@@ -16,15 +28,21 @@ import {
 import {
   clearCustomerProfile,
   readCustomerProfile,
+  recordCouponUse,
   submitPublicOrder,
+  validateCouponCode,
   writeCustomerProfile,
 } from '../lib/catalog';
+import { QrCodeSvg } from './QrCodeSvg';
 import { SmartImage } from './SmartImage';
 
 interface CartDrawerProps {
   open: boolean;
   items: CartItem[];
   settings: StoreSettings;
+  activeCoupon?: Coupon | null;
+  onApplyCoupon?: (coupon: Coupon | null) => void;
+  onOpenTracker?: (code: string) => void;
   onClose: () => void;
   onUpdateQty: (sku: string, size: string, delta: number) => void;
   onRemove: (sku: string, size: string) => void;
@@ -35,6 +53,9 @@ export function CartDrawer({
   open,
   items,
   settings,
+  activeCoupon = null,
+  onApplyCoupon,
+  onOpenTracker,
   onClose,
   onUpdateQty,
   onRemove,
@@ -52,9 +73,20 @@ export function CartDrawer({
     savedProfile?.paymentMethod || 'efectivo'
   );
   const [notes, setNotes] = useState('');
+  const [couponInput, setCouponInput] = useState(activeCoupon?.code || '');
+  const [couponMsg, setCouponMsg] = useState('');
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [sentCode, setSentCode] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  useEffect(() => {
+    if (activeCoupon?.code) {
+      setCouponInput(activeCoupon.code);
+      setCouponMsg('');
+    }
+  }, [activeCoupon?.code]);
 
   useEffect(() => {
     if (
@@ -76,7 +108,28 @@ export function CartDrawer({
 
   if (!open) return null;
 
-  const summary = summarizeCart(items, settings, deliveryType, paymentMethod);
+  const summary = summarizeCart(items, settings, deliveryType, paymentMethod, activeCoupon);
+
+  const handleApplyCoupon = async () => {
+    const clean = couponInput.trim().toUpperCase();
+    if (!clean) {
+      setCouponMsg('Escribe un código VIP o cupón.');
+      return;
+    }
+    setCheckingCoupon(true);
+    setCouponMsg('');
+    try {
+      const res = await validateCouponCode(clean);
+      if (!res.valid || !res.coupon) {
+        setCouponMsg(res.reason || 'Cupón no válido.');
+        return;
+      }
+      onApplyCoupon?.(res.coupon);
+      setCouponMsg('');
+    } finally {
+      setCheckingCoupon(false);
+    }
+  };
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +144,8 @@ export function CartDrawer({
       return;
     }
 
-    const orderCode = `YOL-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const orderCode = `YOL-ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+    const appliedCode = summary.discountCup > 0 && activeCoupon ? activeCoupon.code : '';
     const waUrl = buildWhatsAppOrderLink({
       orderCode,
       customerName,
@@ -103,6 +157,7 @@ export function CartDrawer({
       notes,
       items,
       summary,
+      discountCode: appliedCode || undefined,
       settings,
     });
 
@@ -131,12 +186,18 @@ export function CartDrawer({
           unit_price: it.product.price,
           image_url: it.product.image_url,
         })),
-        subtotal_cup: summary.subtotalCup,
-        subtotal_usd: summary.subtotalUsd,
+        subtotal_cup: summary.discountedSubtotalCup,
+        subtotal_usd: summary.discountedSubtotalUsd,
         delivery_fee_cup: summary.deliveryFeeCup,
+        discount_code: appliedCode,
+        discount_cup: summary.discountCup,
+        discount_usd: summary.discountUsd,
         has_unpriced_items: summary.hasUnpricedItems,
         notes: savedNotes,
       });
+      if (appliedCode) {
+        await recordCouponUse(appliedCode);
+      }
     } catch {
       // No bloqueamos el pedido por WhatsApp si hay intermitencia de red
     } finally {
@@ -147,15 +208,30 @@ export function CartDrawer({
     window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const trackUrl = sentCode
+    ? `${typeof window !== 'undefined' ? window.location.origin : 'https://yoleshop.ddns.net'}/?track=${encodeURIComponent(sentCode)}`
+    : '';
+
   return (
-    <div className="drawer-backdrop" role="dialog" aria-modal="true" aria-label="Carrito de compra" onClick={onClose}>
+    <div
+      className="drawer-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Carrito de compra"
+      onClick={onClose}
+    >
       <aside className="drawer-panel" onClick={(e) => e.stopPropagation()}>
         <header className="drawer-head">
           <div className="drawer-title">
             <ShoppingBag size={20} />
             <h2>Tu Pedido ({summary.totalUnits})</h2>
           </div>
-          <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar carrito">
+          <button
+            type="button"
+            className="drawer-close"
+            onClick={onClose}
+            aria-label="Cerrar carrito"
+          >
             <X size={20} />
           </button>
         </header>
@@ -165,7 +241,9 @@ export function CartDrawer({
             <div className="drawer-empty">
               <ShoppingBag size={42} strokeWidth={1.4} />
               <p>Tu carrito está vacío.</p>
-              <span>Agrega tenis, ropa Shein o accesorios para enviar tu pedido directo por WhatsApp.</span>
+              <span>
+                Agrega tenis, ropa Shein o accesorios para enviar tu pedido directo por WhatsApp.
+              </span>
             </div>
           ) : (
             <>
@@ -185,7 +263,9 @@ export function CartDrawer({
                         wrapperClassName="cart-item__thumb"
                       />
                       <div className="cart-item__info">
-                        <div className="cart-item__sku">{it.product.sku} · Talla {it.size}</div>
+                        <div className="cart-item__sku">
+                          {it.product.sku} · Talla {it.size}
+                        </div>
                         <div className="cart-item__title">{it.product.title}</div>
                         <div className="cart-item__price">{pInfo.primary}</div>
                         <div className="cart-item__controls">
@@ -219,12 +299,68 @@ export function CartDrawer({
                 })}
               </div>
 
+              {/* Cupón o enlace VIP */}
+              <div className="coupon-box">
+                <div className="coupon-box__head">
+                  <Tag size={14} />
+                  <span>¿Tienes cupón o código VIP?</span>
+                </div>
+                {activeCoupon ? (
+                  <div className="coupon-active-pill">
+                    <span>
+                      <strong>{activeCoupon.code}</strong> ·{' '}
+                      {activeCoupon.vip_label ||
+                        (activeCoupon.discount_type === 'percent'
+                          ? `-${activeCoupon.discount_value}%`
+                          : activeCoupon.discount_type === 'fixed_usd'
+                            ? `-$${activeCoupon.discount_value} USD`
+                            : `-${formatCup(activeCoupon.discount_value)}`)}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-link"
+                      onClick={() => {
+                        onApplyCoupon?.(null);
+                        setCouponInput('');
+                      }}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="coupon-input-row">
+                    <input
+                      type="text"
+                      placeholder="Ej. YOLE10"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      aria-label="Código de cupón"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--outline-dark btn--sm"
+                      disabled={checkingCoupon}
+                      onClick={() => void handleApplyCoupon()}
+                    >
+                      {checkingCoupon ? '...' : 'Aplicar'}
+                    </button>
+                  </div>
+                )}
+                {couponMsg && <p className="coupon-err">{couponMsg}</p>}
+              </div>
+
               <form id="yole-checkout-form" className="checkout-form" onSubmit={handleCheckout}>
                 <div className="checkout-summary">
                   {summary.subtotalCup > 0 && (
                     <div className="sum-row">
                       <span>Subtotal ({formatUsd(summary.subtotalUsd)})</span>
                       <strong>{formatCup(summary.subtotalCup)}</strong>
+                    </div>
+                  )}
+                  {summary.discountCup > 0 && activeCoupon && (
+                    <div className="sum-row sum-row--discount">
+                      <span>Descuento {activeCoupon.code}</span>
+                      <strong>-{formatCup(summary.discountCup)}</strong>
                     </div>
                   )}
                   {summary.deliveryFeeCup > 0 && (
@@ -375,11 +511,44 @@ export function CartDrawer({
                 {errorMsg && <p className="form-error">{errorMsg}</p>}
 
                 {sentCode && (
-                  <div className="form-ok">
-                    Pedido <strong>{sentCode}</strong> guardado y abierto en WhatsApp.
-                    <button type="button" className="btn-link" onClick={onClear}>
-                      Vaciar carrito
-                    </button>
+                  <div className="order-qr-confirm">
+                    <div className="order-qr-confirm__info">
+                      <strong>Pedido {sentCode} guardado</strong>
+                      <p>Guarda o escanea este código QR para seguir el estado de tu paquete.</p>
+                      <div className="order-qr-confirm__btns">
+                        <button
+                          type="button"
+                          className="btn btn--outline-dark btn--sm"
+                          onClick={() => {
+                            void navigator.clipboard?.writeText(sentCode);
+                            setCopiedCode(true);
+                            setTimeout(() => setCopiedCode(false), 1800);
+                          }}
+                        >
+                          {copiedCode ? <Check size={13} /> : <Copy size={13} />}
+                          <span>{copiedCode ? 'Copiado' : 'Copiar código'}</span>
+                        </button>
+                        {onOpenTracker && (
+                          <button
+                            type="button"
+                            className="btn btn--primary btn--sm"
+                            onClick={() => {
+                              onClose();
+                              onOpenTracker(sentCode);
+                            }}
+                          >
+                            <Package size={13} />
+                            <span>Ver seguimiento</span>
+                          </button>
+                        )}
+                        <button type="button" className="btn-link" onClick={onClear}>
+                          Vaciar carrito
+                        </button>
+                      </div>
+                    </div>
+                    <div className="order-qr-confirm__qr">
+                      <QrCodeSvg value={trackUrl} size={88} />
+                    </div>
                   </div>
                 )}
               </form>

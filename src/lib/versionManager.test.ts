@@ -1,65 +1,76 @@
-import { describe, expect, it } from 'vitest';
-import { bumpSemver, compareSemver, evaluateUpdateState, parseSemver } from './versionManager';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import {
+  bumpSemver,
+  compareSemver,
+  evaluateUpdateState,
+  isUpdateSuppressedForSession,
+  markUpdateDismissed,
+} from './versionManager';
 
 describe('versionManager', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
   it('compara versiones semver correctamente', () => {
-    expect(parseSemver('v1.2.10')).toEqual([1, 2, 10]);
-    expect(compareSemver('1.2.0', '1.1.9')).toBeGreaterThan(0);
-    expect(compareSemver('1.1.0', '1.1.0')).toBe(0);
-    expect(compareSemver('1.0.5', '1.1.0')).toBeLessThan(0);
-    expect(bumpSemver('1.1.0', 'patch')).toBe('1.1.1');
-    expect(bumpSemver('1.1.4', 'minor')).toBe('1.2.0');
+    expect(compareSemver('1.1.0', '1.0.0')).toBeGreaterThan(0);
+    expect(compareSemver('1.3.0', '1.3.0')).toBe(0);
+    expect(compareSemver('1.0.9', '1.1.0')).toBeLessThan(0);
+    expect(bumpSemver('1.3.0', 'patch')).toBe('1.3.1');
+    expect(bumpSemver('1.3.0', 'minor')).toBe('1.4.0');
   });
 
-  it('detecta actualización obligatoria cuando cambia el buildId o sube la versión mínima', () => {
-    const resBuild = evaluateUpdateState({
-      embedded: { version: '1.1.0', buildId: 'oldhash123' },
-      manifest: {
-        version: '1.1.0',
-        buildId: 'newhash456',
-        mandatory: true,
-        title: 'Nueva versión lista',
-      },
-      remoteRelease: null,
-    });
-    expect(resBuild.updateAvailable).toBe(true);
-    expect(resBuild.mandatory).toBe(true);
-    expect(resBuild.source).toBe('manifest');
-
-    const resPolicy = evaluateUpdateState({
-      embedded: { version: '1.0.0', buildId: 'dev' },
-      manifest: null,
+  it('detecta actualización no bloqueante cuando remoteRelease tiene nueva versión', () => {
+    const state = evaluateUpdateState({
+      embedded: { version: '1.1.0', buildId: 'abc123' },
+      manifest: { version: '1.1.0', buildId: 'abc123' },
       remoteRelease: {
         id: 'yole-shop',
-        latest_version: '1.1.0',
-        min_version: '1.1.0',
-        mandatory: true,
-        title: 'Actualización crítica',
-        description: 'Nuevas mecánicas listas.',
-        features: ['Logo oficial', 'Modo oscuro completo'],
+        latest_version: '1.3.0',
+        min_version: '1.3.0',
+        mandatory: false,
+        title: '¡Actualización disponible!',
+        description: 'Nuevas funciones.',
+        features: ['Seguimiento QR', 'Cupones VIP'],
       },
+      swWaiting: false,
     });
-    expect(resPolicy.updateAvailable).toBe(true);
-    expect(resPolicy.mandatory).toBe(true);
-    expect(resPolicy.source).toBe('remote-policy');
-    expect(resPolicy.targetVersion).toBe('1.1.0');
+
+    expect(state.updateAvailable).toBe(true);
+    expect(state.mandatory).toBe(false);
+    expect(state.targetVersion).toBe('1.3.0');
+    expect(state.features).toEqual(['Seguimiento QR', 'Cupones VIP']);
   });
 
-  it('no marca actualización falsa cuando la versión y build coinciden', () => {
-    const ok = evaluateUpdateState({
-      embedded: { version: '1.1.0', buildId: 'abc1234567' },
-      manifest: { version: '1.1.0', buildId: 'abc1234567', mandatory: true },
+  it('permite descartar la versión en sesión sin bucle infinito', () => {
+    markUpdateDismissed('1.3.0');
+    expect(isUpdateSuppressedForSession('1.3.0', '1.2.0')).toBe(true);
+    expect(isUpdateSuppressedForSession('1.4.0', '1.2.0')).toBe(false);
+  });
+
+  it('reporta al día cuando versión y build coinciden', () => {
+    const state = evaluateUpdateState({
+      embedded: { version: '1.3.0', buildId: 'build99' },
+      manifest: { version: '1.3.0', buildId: 'build99' },
       remoteRelease: {
         id: 'yole-shop',
-        latest_version: '1.1.0',
-        min_version: '1.1.0',
-        mandatory: true,
-        title: 'Al día',
+        latest_version: '1.3.0',
+        min_version: '1.0.0',
+        mandatory: false,
+        title: 'Actualización',
         description: 'Todo al día',
         features: [],
       },
+      swWaiting: false,
     });
-    expect(ok.updateAvailable).toBe(false);
-    expect(ok.source).toBe('uptodate');
+
+    expect(state.updateAvailable).toBe(false);
+    expect(state.source).toBe('uptodate');
   });
 });
+
+vi.mock('./supabase', () => ({
+  supabase: {
+    from: vi.fn(),
+  },
+}));

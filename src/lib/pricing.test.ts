@@ -154,4 +154,43 @@ describe('pricing & WhatsApp helpers', () => {
     });
     expect(supplierText).toContain('🙋🏼‍♀️Gestor: yolexsis');
   });
+
+  it('aplica descuento de cupón VIP y genera enlace de seguimiento QR', () => {
+    const summary = summarizeCart(
+      [{ product: sampleShoe, size: '38', qty: 1 }],
+      DEFAULT_SETTINGS,
+      'recogida',
+      'efectivo',
+      {
+        id: 'c1',
+        code: 'YOLE10',
+        discount_type: 'percent',
+        discount_value: 10,
+        department: 'all',
+        min_order_usd: 0,
+        is_reseller_vip: true,
+        vip_label: 'VIP 10%',
+      }
+    );
+    expect(summary.discountCup).toBe(3500);
+    expect(summary.discountedSubtotalCup).toBe(31500);
+    expect(summary.totalCupWithExtras).toBe(31500);
+
+    const oLink = buildWhatsAppOrderLink({
+      orderCode: 'YOL-ORD-1042',
+      customerName: 'Ana',
+      customerPhone: '+5351234567',
+      deliveryType: 'recogida',
+      deliveryAddress: '',
+      paymentMethod: 'efectivo',
+      notes: '',
+      items: [{ product: sampleShoe, size: '38', qty: 1 }],
+      summary,
+      discountCode: 'YOLE10',
+      settings: DEFAULT_SETTINGS,
+    });
+    const decoded = decodeURIComponent(oLink);
+    expect(decoded).toContain('YOLE10');
+    expect(decoded).toContain('https://yoleshop.ddns.net/?track=YOL-ORD-1042');
+  });
 });

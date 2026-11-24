@@ -1,5 +1,6 @@
 import type {
   CartItem,
+  Coupon,
   Currency,
   DeliveryType,
   PaymentMethod,
@@ -106,17 +107,74 @@ export interface CartSummary {
   totalUnits: number;
   subtotalCup: number;
   subtotalUsd: number;
+  discountCup: number;
+  discountUsd: number;
+  discountedSubtotalCup: number;
+  discountedSubtotalUsd: number;
   deliveryFeeCup: number;
   transferFeeCup: number;
   totalCupWithExtras: number;
   hasUnpricedItems: boolean;
 }
 
+export function calculateCouponDiscount(
+  items: CartItem[],
+  coupon: Coupon | null | undefined,
+  usdToCupRate: number
+): { discountCup: number; discountUsd: number; eligible: boolean; reason?: string } {
+  if (!coupon || items.length === 0) {
+    return { discountCup: 0, discountUsd: 0, eligible: false };
+  }
+  const rate = usdToCupRate > 0 ? usdToCupRate : 980;
+  let eligibleCup = 0;
+  let totalCup = 0;
+
+  for (const it of items) {
+    if (it.product.price === null || !Number.isFinite(it.product.price)) continue;
+    const lineCup = (priceInCup(it.product.price, it.product.currency, rate) ?? 0) * it.qty;
+    totalCup += lineCup;
+    if (coupon.department === 'all' || it.product.department === coupon.department) {
+      eligibleCup += lineCup;
+    }
+  }
+
+  const totalUsd = Math.round((totalCup / rate) * 100) / 100;
+  if (coupon.min_order_usd > 0 && totalUsd < coupon.min_order_usd) {
+    return {
+      discountCup: 0,
+      discountUsd: 0,
+      eligible: false,
+      reason: `Requiere pedido mínimo de $${coupon.min_order_usd} USD`,
+    };
+  }
+  if (eligibleCup <= 0) {
+    return {
+      discountCup: 0,
+      discountUsd: 0,
+      eligible: false,
+      reason: 'Aplica solo a otra categoría del catálogo',
+    };
+  }
+
+  let discountCup = 0;
+  if (coupon.discount_type === 'percent') {
+    discountCup = Math.round((eligibleCup * Math.min(90, coupon.discount_value)) / 100);
+  } else if (coupon.discount_type === 'fixed_usd') {
+    discountCup = Math.min(eligibleCup, Math.round(coupon.discount_value * rate));
+  } else {
+    discountCup = Math.min(eligibleCup, Math.round(coupon.discount_value));
+  }
+
+  const discountUsd = Math.round((discountCup / rate) * 100) / 100;
+  return { discountCup, discountUsd, eligible: discountCup > 0 };
+}
+
 export function summarizeCart(
   items: CartItem[],
   settings: StoreSettings,
   deliveryType: DeliveryType,
-  paymentMethod: PaymentMethod
+  paymentMethod: PaymentMethod,
+  coupon?: Coupon | null
 ): CartSummary {
   let totalUnits = 0;
   let subtotalCup = 0;
@@ -134,20 +192,28 @@ export function summarizeCart(
   }
 
   const subtotalUsd = Math.round((subtotalCup / rate) * 100) / 100;
+  const disc = calculateCouponDiscount(items, coupon, rate);
+  const discountedSubtotalCup = Math.max(0, subtotalCup - disc.discountCup);
+  const discountedSubtotalUsd = Math.round((discountedSubtotalCup / rate) * 100) / 100;
+
   const deliveryFeeCup =
     deliveryType === 'domicilio' && items.length > 0 ? Math.round(settings.delivery_fee_cup) : 0;
   const transferFeeCup =
-    paymentMethod === 'transferencia' && subtotalCup > 0
-      ? Math.round((subtotalCup * settings.transfer_surcharge_pct) / 100)
+    paymentMethod === 'transferencia' && discountedSubtotalCup > 0
+      ? Math.round((discountedSubtotalCup * settings.transfer_surcharge_pct) / 100)
       : 0;
 
   return {
     totalUnits,
     subtotalCup,
     subtotalUsd,
+    discountCup: disc.discountCup,
+    discountUsd: disc.discountUsd,
+    discountedSubtotalCup,
+    discountedSubtotalUsd,
     deliveryFeeCup,
     transferFeeCup,
-    totalCupWithExtras: subtotalCup + deliveryFeeCup + transferFeeCup,
+    totalCupWithExtras: discountedSubtotalCup + deliveryFeeCup + transferFeeCup,
     hasUnpricedItems,
   };
 }
@@ -238,11 +304,16 @@ export function formatWhatsAppOrderText(params: {
   summary: {
     subtotalCup: number;
     subtotalUsd: number;
+    discountCup?: number;
+    discountUsd?: number;
+    discountedSubtotalCup?: number;
+    discountedSubtotalUsd?: number;
     deliveryFeeCup: number;
     transferFeeCup: number;
     totalCupWithExtras: number;
     hasUnpricedItems: boolean;
   };
+  discountCode?: string;
   settings: StoreSettings;
   includeManager?: boolean;
 }): string {
@@ -320,6 +391,12 @@ export function formatWhatsAppOrderText(params: {
     `🕒 Hora de la entrega: ${timeValue}`,
   ];
 
+  if (params.discountCode && (params.summary.discountCup || 0) > 0) {
+    lines.push(
+      '',
+      `🏷️ Cupón VIP ${params.discountCode}: -${formatCup(params.summary.discountCup || 0)} (-${formatUsd(params.summary.discountUsd || 0)})`
+    );
+  }
   if (params.notes.trim()) {
     lines.push('', `📝 Nota: ${params.notes.trim()}`);
   }
@@ -327,7 +404,8 @@ export function formatWhatsAppOrderText(params: {
     lines.push('', '🙋🏼‍♀️Gestor: yolexsis');
   }
   if (params.orderCode) {
-    lines.push('', `Código: ${params.orderCode}`);
+    lines.push('', `📦 Código de seguimiento: ${params.orderCode}`);
+    lines.push(`🔎 Estado: https://yoleshop.ddns.net/?track=${encodeURIComponent(params.orderCode)}`);
   }
 
   return lines.join('\n');
@@ -344,6 +422,7 @@ export function buildWhatsAppOrderLink(params: {
   notes: string;
   items: CartItem[];
   summary: CartSummary;
+  discountCode?: string;
   settings: StoreSettings;
 }): string {
   const phone = normalizeWhatsAppDigits(params.settings.whatsapp_number);

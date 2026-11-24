@@ -38,11 +38,14 @@ const FALLBACK_FEATURES = [
   'Precios y disponibilidad sincronizados al día',
 ];
 
+const UPD_GUARD_KEY = 'yole_upd_guard_v1';
+const UPD_DISMISSED_KEY = 'yole_upd_dismissed_v1';
+
 export function getEmbeddedVersionInfo(): EmbeddedVersionInfo {
   const version =
     typeof __YOLE_VERSION__ === 'string' && __YOLE_VERSION__.trim()
       ? __YOLE_VERSION__.trim()
-      : '1.1.0';
+      : '1.3.0';
   const buildId =
     typeof __YOLE_BUILD_ID__ === 'string' && __YOLE_BUILD_ID__.trim()
       ? __YOLE_BUILD_ID__.trim()
@@ -71,9 +74,44 @@ export function compareSemver(a?: string | null, b?: string | null): number {
 }
 
 export function bumpSemver(version: string, part: 'patch' | 'minor' = 'patch'): string {
-  const parsed = parseSemver(version) ?? [1, 1, 0];
+  const parsed = parseSemver(version) ?? [1, 3, 0];
   if (part === 'minor') return `${parsed[0]}.${parsed[1] + 1}.0`;
   return `${parsed[0]}.${parsed[1]}.${parsed[2] + 1}`;
+}
+
+export function markUpdateDismissed(version: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(UPD_DISMISSED_KEY, version.trim());
+  } catch {
+    // ignore
+  }
+}
+
+export function isUpdateSuppressedForSession(targetVersion: string, currentVersion: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const dismissed = window.sessionStorage.getItem(UPD_DISMISSED_KEY);
+    if (dismissed && dismissed === targetVersion.trim()) return true;
+
+    const rawGuard = window.sessionStorage.getItem(UPD_GUARD_KEY);
+    if (rawGuard) {
+      const guard = JSON.parse(rawGuard) as { from?: string; at?: number };
+      // If user clicked Update < 45s ago and browser still temporarily served same bundle, prevent loop
+      if (
+        guard &&
+        typeof guard.at === 'number' &&
+        Date.now() - guard.at < 45000 &&
+        guard.from === currentVersion
+      ) {
+        return true;
+      }
+      window.sessionStorage.removeItem(UPD_GUARD_KEY);
+    }
+  } catch {
+    // ignore
+  }
+  return false;
 }
 
 export async function fetchManifestVersion(): Promise<VersionManifest | null> {
@@ -87,7 +125,7 @@ export async function fetchManifestVersion(): Promise<VersionManifest | null> {
       version: raw.version.trim(),
       buildId: typeof raw.buildId === 'string' ? raw.buildId.trim() : '',
       releasedAt: typeof raw.releasedAt === 'string' ? raw.releasedAt.trim() : undefined,
-      mandatory: typeof raw.mandatory === 'boolean' ? raw.mandatory : true,
+      mandatory: false,
       title: typeof raw.title === 'string' ? raw.title.trim() : undefined,
       description: typeof raw.description === 'string' ? raw.description.trim() : undefined,
       features: Array.isArray(raw.features)
@@ -113,7 +151,7 @@ export async function fetchRemoteRelease(): Promise<AppRelease | null> {
       id: String(row.id || 'yole-shop'),
       latest_version: String(row.latest_version || '').trim(),
       min_version: String(row.min_version || '').trim(),
-      mandatory: row.mandatory !== false,
+      mandatory: Boolean(row.mandatory),
       title: String(row.title || '¡Actualización disponible!'),
       description: String(
         row.description ||
@@ -207,9 +245,8 @@ export function evaluateUpdateState(input: {
       ? remoteRelease.latest_version || embedded.version
       : manifest?.version || embedded.version;
 
-  const mandatory = Boolean(
-    minVersionRequired || (remoteRelease ? remoteRelease.mandatory : manifest?.mandatory ?? true)
-  );
+  // Nunca bloqueamos con cartel de "obligatoria": siempre permitimos actualizar o cerrar limpio
+  const mandatory = false;
 
   const useRemoteCopy = Boolean(
     remoteRelease &&
@@ -225,7 +262,7 @@ export function evaluateUpdateState(input: {
   const description =
     (useRemoteCopy && remoteRelease?.description) ||
     manifest?.description ||
-    'Hay una nueva versión de Yole Shop lista con nuevas funciones, mejoras visuales y datos al día. Actualiza para continuar.';
+    'Hay una nueva versión de Yole Shop lista con nuevas funciones y el catálogo al día.';
   const features =
     (useRemoteCopy && remoteRelease?.features?.length ? remoteRelease.features : null) ||
     (manifest?.features?.length ? manifest.features : null) ||
@@ -256,7 +293,14 @@ export async function checkAppUpdate(): Promise<EvaluatedUpdateState> {
     detectWaitingServiceWorker(),
   ]);
 
-  return evaluateUpdateState({ embedded, manifest, remoteRelease, swWaiting });
+  const evaluated = evaluateUpdateState({ embedded, manifest, remoteRelease, swWaiting });
+  if (
+    evaluated.updateAvailable &&
+    isUpdateSuppressedForSession(evaluated.targetVersion, embedded.version)
+  ) {
+    return { ...evaluated, updateAvailable: false };
+  }
+  return evaluated;
 }
 
 async function detectWaitingServiceWorker(): Promise<boolean> {
@@ -272,20 +316,19 @@ async function detectWaitingServiceWorker(): Promise<boolean> {
 }
 
 export async function applyForcedAppUpdate(): Promise<void> {
+  const embedded = getEmbeddedVersionInfo();
   try {
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg?.waiting) {
-        reg.waiting.postMessage({ type: 'PURGE_AND_UPDATE' });
-      } else if (reg?.active) {
-        reg.active.postMessage({ type: 'PURGE_AND_UPDATE' });
-      }
-      await reg?.update().catch(() => undefined);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(
+        UPD_GUARD_KEY,
+        JSON.stringify({ from: embedded.version, at: Date.now() })
+      );
     }
   } catch {
-    /* continúa limpiando cachés directamente */
+    // ignore
   }
 
+  // 1. Delete all shell & API caches (keep only product WebP media cache)
   try {
     if (typeof window !== 'undefined' && 'caches' in window) {
       const keys = await window.caches.keys();
@@ -297,6 +340,16 @@ export async function applyForcedAppUpdate(): Promise<void> {
     }
   } catch {
     /* modo privado sin CacheStorage */
+  }
+
+  // 2. Unregister stale Service Workers completely so browser loads fresh HTML/JS directly from network
+  try {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((reg) => reg.unregister().catch(() => false)));
+    }
+  } catch {
+    /* continuar recarga */
   }
 
   if (typeof window !== 'undefined') {

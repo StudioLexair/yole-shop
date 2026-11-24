@@ -2,7 +2,7 @@
 
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://studiolexair.ddns.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https:; connect-src 'self' https://lroyrrgcjjtijwutykzm.supabase.co wss://lroyrrgcjjtijwutykzm.supabase.co https://ywrspyrplgwxkwdboaiz.supabase.co https://studiolexair.ddns.net; manifest-src 'self'; worker-src 'self'; frame-ancestors 'self' https://studiolexair.ddns.net https://studiolexair.pages.dev https://studio-lexair.vercel.app; object-src 'none'; base-uri 'self'; form-action 'self' https://wa.me; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://studiolexair.ddns.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://lroyrrgcjjtijwutykzm.supabase.co wss://lroyrrgcjjtijwutykzm.supabase.co https://ywrspyrplgwxkwdboaiz.supabase.co https://studiolexair.ddns.net; manifest-src 'self'; worker-src 'self'; frame-ancestors 'self' https://studiolexair.ddns.net https://studiolexair.pages.dev https://studio-lexair.vercel.app; object-src 'none'; base-uri 'self'; form-action 'self' https://wa.me; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   X-Permitted-Cross-Domain-Policies: none
   Referrer-Policy: strict-origin-when-cross-origin
@@ -21,6 +21,12 @@
   X-Robots-Tag: noindex, nofollow
   ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://lroyrrgcjjtijwutykzm.supabase.co wss://lroyrrgcjjtijwutykzm.supabase.co; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests
+
+/
+  Cache-Control: no-cache, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
 
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate

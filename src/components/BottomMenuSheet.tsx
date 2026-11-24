@@ -7,6 +7,7 @@ import {
   MapPin,
   MessageCircle,
   Moon,
+  Package,
   Smartphone,
   Sun,
   Truck,
@@ -38,6 +39,7 @@ interface BottomMenuSheetProps {
   onSelectDept: (dep: Department | 'all') => void;
   onSelectSheinGender: (g: 'all' | 'mujer' | 'hombre') => void;
   onChangeCurrency: (c: Currency) => void;
+  onOpenTracker: () => void;
   directWaUrl: string;
   canPromptInstall: boolean;
   isInstalled: boolean;
@@ -60,6 +62,7 @@ export function BottomMenuSheet({
   onSelectDept,
   onSelectSheinGender,
   onChangeCurrency,
+  onOpenTracker,
   directWaUrl,
   canPromptInstall,
   isInstalled,
@@ -278,6 +281,21 @@ export function BottomMenuSheet({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Seguir pedido QR */}
+          <div className="sheet-section">
+            <button
+              type="button"
+              className="btn btn--outline-dark btn--block"
+              onClick={() => {
+                onClose();
+                onOpenTracker();
+              }}
+            >
+              <Package size={17} />
+              <span>Seguir mi pedido (QR / Código)</span>
+            </button>
           </div>
 
           {/* Instalar App nativa */}

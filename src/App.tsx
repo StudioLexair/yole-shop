@@ -6,15 +6,18 @@ import {
   Flame,
   Menu,
   MessageCircle,
+  Package,
   Search,
   ShoppingBag,
   SlidersHorizontal,
   Sparkles,
+  Tag,
   X,
 } from 'lucide-react';
 import type {
   CartItem,
   Category,
+  Coupon,
   Currency,
   Department,
   PricePreset,
@@ -31,6 +34,7 @@ import {
   readFavoriteSkus,
   readRecentSkus,
   readThemeMode,
+  validateCouponCode,
   writeCachedStoreData,
   writeFavoriteSkus,
   writeThemeMode,
@@ -39,6 +43,7 @@ import {
   type SortMode,
   type ThemeMode,
 } from './lib/catalog';
+import { trackStoreEvent } from './lib/analytics';
 import { buildWhatsAppUrl, getDisplayPrice, normalizeWhatsAppDigits } from './lib/pricing';
 import { SUPABASE_URL, STORAGE_BUCKET } from './lib/supabase';
 import { ProductCard } from './components/ProductCard';
@@ -51,6 +56,8 @@ import { SmartImage } from './components/SmartImage';
 import { FilterSheet } from './components/FilterSheet';
 import { ContentGuard } from './components/ContentGuard';
 import { UpdateModal } from './components/UpdateModal';
+import { OrderTrackerModal } from './components/OrderTrackerModal';
+import { FlashDropBanner } from './components/FlashDropBanner';
 import { checkAppUpdate, type EvaluatedUpdateState } from './lib/versionManager';
 import {
   buildSearchLexicon,
@@ -125,6 +132,9 @@ export function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [trackerOpen, setTrackerOpen] = useState(false);
+  const [trackerCode, setTrackerCode] = useState('');
+  const [activeCoupon, setActiveCoupon] = useState<Coupon | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -153,15 +163,39 @@ export function App() {
   }, [themeMode]);
 
   useEffect(() => {
+    if (import.meta.env.MODE === 'test' || typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    let urlChanged = false;
+    if (url.searchParams.has('_upd')) {
+      url.searchParams.delete('_upd');
+      urlChanged = true;
+    }
+    const trackParam = url.searchParams.get('track');
+    if (trackParam) {
+      setTrackerCode(trackParam.trim().toUpperCase());
+      setTrackerOpen(true);
+    }
+    const vipParam = url.searchParams.get('vip') || url.searchParams.get('cupon');
+    if (vipParam) {
+      void validateCouponCode(vipParam).then((res) => {
+        if (res.valid && res.coupon) setActiveCoupon(res.coupon);
+      });
+    }
+    if (urlChanged) {
+      const next = url.searchParams.toString()
+        ? `${url.pathname}?${url.searchParams.toString()}`
+        : url.pathname;
+      window.history.replaceState({}, '', next);
+    }
+  }, []);
+
+  useEffect(() => {
     if (import.meta.env.MODE === 'test') return;
     let alive = true;
     const runCheck = () => {
       void checkAppUpdate().then((res) => {
         if (!alive) return;
         setUpdateState(res);
-        if (res.updateAvailable && res.mandatory) {
-          setUpdateDismissed(false);
-        }
       });
     };
     runCheck();
@@ -390,6 +424,11 @@ export function App() {
   const openProductModal = useCallback((product: Product) => {
     setSelectedProduct(product);
     setRecentSkus(pushRecentSku(product.sku));
+    trackStoreEvent({
+      event_type: 'product_view',
+      sku: product.sku,
+      product_title: product.title,
+    });
     if (typeof window !== 'undefined' && !isAdminPath()) {
       const url = new URL(window.location.href);
       url.searchParams.set('sku', product.sku);
@@ -540,6 +579,11 @@ export function App() {
 
   const handleAddToCart = (product: Product, size: string) => {
     const cleanSize = size || product.sizes[0] || 'Única';
+    trackStoreEvent({
+      event_type: 'cart_add',
+      sku: product.sku,
+      product_title: product.title,
+    });
     setCart((prev) => {
       const idx = prev.findIndex(
         (it) => it.product.sku === product.sku && it.size === cleanSize
@@ -579,6 +623,16 @@ export function App() {
     normalizeWhatsAppDigits(settings.whatsapp_number),
     `Hola ${settings.store_name}, quiero consultar sobre los productos del catálogo.`
   );
+
+  // Registrar búsquedas sin resultados con debounce para analítica real en /admin
+  useEffect(() => {
+    const q = search.trim();
+    if (!q || q.length < 3 || loading || filteredProducts.length > 0) return;
+    const t = window.setTimeout(() => {
+      trackStoreEvent({ event_type: 'search_empty', query: q });
+    }, 1100);
+    return () => window.clearTimeout(t);
+  }, [search, loading, filteredProducts.length]);
 
   const deepLinkHandledRef = useRef(false);
 
@@ -625,7 +679,7 @@ export function App() {
           />
         </Suspense>
         <UpdateModal
-          open={Boolean(updateState?.updateAvailable && (!updateDismissed || updateState.mandatory))}
+          open={Boolean(updateState?.updateAvailable && !updateDismissed)}
           updateState={updateState}
           onClosePreview={() => setUpdateDismissed(true)}
         />
@@ -730,6 +784,14 @@ export function App() {
               <p>{settings.hero_title}</p>
             </div>
             <div className="hero-headline-actions">
+              <button
+                type="button"
+                className="btn btn--outline-dark btn--sm"
+                onClick={() => setTrackerOpen(true)}
+              >
+                <Package size={15} />
+                <span>Seguir pedido</span>
+              </button>
               {installPrompt && !isInstalled && (
                 <button
                   type="button"
@@ -819,6 +881,29 @@ export function App() {
 
       {/* Catalog Controls & Grid */}
       <main id="catalogo" className="container catalog-section">
+        {activeCoupon && (
+          <div className="vip-active-banner" role="status">
+            <span>
+              <Tag size={14} /> Cupón VIP activado: <strong>{activeCoupon.code}</strong>
+              {activeCoupon.vip_label ? ` (${activeCoupon.vip_label})` : ''}
+            </span>
+            <button type="button" className="btn-link" onClick={() => setCartOpen(true)}>
+              Usar en carrito
+            </button>
+          </div>
+        )}
+
+        <FlashDropBanner
+          settings={settings}
+          newestActive={sort === 'newest'}
+          onActivateNewest={() => {
+            setSort((prev) => (prev === 'newest' ? 'featured' : 'newest'));
+            setDepartment('all');
+            setCategoryId('all');
+            setVisibleLimit(PAGE_STEP);
+          }}
+        />
+
         <div className="search-filter-row">
           <div
             ref={searchWrapRef}
@@ -1337,6 +1422,13 @@ export function App() {
           onToggleFavorite={toggleFavoriteSku}
           onClose={closeProductModal}
           onAddToCart={handleAddToCart}
+          onWhatsAppClick={(prod) =>
+            trackStoreEvent({
+              event_type: 'whatsapp_click',
+              sku: prod.sku,
+              product_title: prod.title,
+            })
+          }
         />
       )}
 
@@ -1344,10 +1436,23 @@ export function App() {
         open={cartOpen}
         items={cart}
         settings={settings}
+        activeCoupon={activeCoupon}
+        onApplyCoupon={setActiveCoupon}
+        onOpenTracker={(code) => {
+          setTrackerCode(code);
+          setTrackerOpen(true);
+        }}
         onClose={() => setCartOpen(false)}
         onUpdateQty={handleUpdateQty}
         onRemove={handleRemoveItem}
         onClear={() => setCart([])}
+      />
+
+      <OrderTrackerModal
+        open={trackerOpen}
+        initialCode={trackerCode}
+        settings={settings}
+        onClose={() => setTrackerOpen(false)}
       />
 
       <FloatingCartButton
@@ -1415,6 +1520,7 @@ export function App() {
         onSelectDept={handleSelectDept}
         onSelectSheinGender={handleSelectSheinGender}
         onChangeCurrency={setDisplayCurrency}
+        onOpenTracker={() => setTrackerOpen(true)}
         directWaUrl={directWaUrl}
         canPromptInstall={Boolean(installPrompt)}
         isInstalled={isInstalled}
@@ -1422,7 +1528,7 @@ export function App() {
       />
 
       <UpdateModal
-        open={Boolean(updateState?.updateAvailable && (!updateDismissed || updateState.mandatory))}
+        open={Boolean(!splashMounted && updateState?.updateAvailable && !updateDismissed)}
         updateState={updateState}
         onClosePreview={() => setUpdateDismissed(true)}
       />

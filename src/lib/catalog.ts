@@ -1,5 +1,7 @@
 import type {
   Category,
+  Coupon,
+  CouponValidationResult,
   Currency,
   Department,
   Order,
@@ -7,6 +9,9 @@ import type {
   PricePreset,
   Product,
   ProductStatus,
+  PublicOrderTracking,
+  SizeRequest,
+  SizeRequestStatus,
   StoreSettings,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
@@ -226,6 +231,12 @@ export async function fetchStoreData(): Promise<{
         shein_under_20_markup: Number(rawSettings.shein_under_20_markup) || 2,
         shein_even_20_plus_markup: Number(rawSettings.shein_even_20_plus_markup) || 2,
         shein_odd_20_plus_markup: Number(rawSettings.shein_odd_20_plus_markup) || 3,
+        flash_enabled: rawSettings.flash_enabled !== false,
+        flash_badge: String(rawSettings.flash_badge || DEFAULT_SETTINGS.flash_badge || 'NUEVO DROP'),
+        flash_title: String(rawSettings.flash_title || DEFAULT_SETTINGS.flash_title || ''),
+        flash_subtitle: String(rawSettings.flash_subtitle || DEFAULT_SETTINGS.flash_subtitle || ''),
+        flash_ends_at:
+          typeof rawSettings.flash_ends_at === 'string' ? rawSettings.flash_ends_at : null,
       }
     : DEFAULT_SETTINGS;
 
@@ -236,6 +247,7 @@ export async function fetchStoreData(): Promise<{
     sizes: Array.isArray(row.sizes) ? row.sizes : [],
     sold_out_sizes: Array.isArray(row.sold_out_sizes) ? row.sold_out_sizes : [],
     extra_images: Array.isArray(row.extra_images) ? row.extra_images : [],
+    video_url: typeof row.video_url === 'string' ? row.video_url : '',
   }));
 
   const pricePresets: PricePreset[] = (presetsRes.data || []).map((row) => ({
@@ -266,6 +278,26 @@ export async function uploadProductWebP(
   if (error) throw error;
   const imageUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
   return { imageUrl, imagePath: path };
+}
+
+export async function uploadProductVideo(
+  sku: string,
+  file: File
+): Promise<string> {
+  if (file.size > 18 * 1024 * 1024) {
+    throw new Error('El clip debe pesar menos de 18 MB.');
+  }
+  const cleanSku = sku.replace(/[^a-zA-Z0-9_-]/g, '') || `YOL-${Date.now()}`;
+  const ext = file.name.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
+  const path = `videos/${cleanSku}-${Date.now()}.${ext}`;
+  const contentType = file.type || (ext === 'webm' ? 'video/webm' : 'video/mp4');
+  const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, {
+    contentType,
+    cacheControl: 'public, max-age=31536000, immutable',
+    upsert: true,
+  });
+  if (error) throw error;
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
 }
 
 export async function saveProduct(
@@ -402,7 +434,125 @@ export async function fetchOrders(): Promise<Order[]> {
 }
 
 export async function updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
-  const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+  const { error } = await supabase
+    .from('orders')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchOrderTracking(orderCode: string): Promise<PublicOrderTracking | null> {
+  const clean = orderCode.trim().toUpperCase();
+  if (clean.length < 3) return null;
+  const { data, error } = await supabase.rpc('get_order_tracking', { p_code: clean });
+  if (error) throw error;
+  if (!data) return null;
+  return data as PublicOrderTracking;
+}
+
+export async function submitSizeRequest(payload: {
+  sku: string;
+  product_title: string;
+  requested_size: string;
+  customer_name: string;
+  customer_whatsapp: string;
+  note?: string;
+}): Promise<void> {
+  const { error } = await supabase.from('size_requests').insert({
+    sku: payload.sku,
+    product_title: payload.product_title,
+    requested_size: payload.requested_size.trim() || 'Consultar',
+    customer_name: payload.customer_name.trim(),
+    customer_whatsapp: payload.customer_whatsapp.trim(),
+    note: (payload.note || '').trim(),
+    status: 'pendiente',
+  });
+  if (error) throw error;
+}
+
+export async function fetchSizeRequests(): Promise<SizeRequest[]> {
+  const { data, error } = await supabase
+    .from('size_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data || []) as SizeRequest[];
+}
+
+export async function updateSizeRequestStatus(
+  id: string,
+  status: SizeRequestStatus
+): Promise<void> {
+  const { error } = await supabase.from('size_requests').update({ status }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteSizeRequest(id: string): Promise<void> {
+  const { error } = await supabase.from('size_requests').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function validateCouponCode(code: string): Promise<CouponValidationResult> {
+  const clean = code.trim().toUpperCase();
+  if (!clean) return { valid: false, reason: 'Escribe un código válido' };
+  const { data, error } = await supabase.rpc('validate_coupon', { p_code: clean });
+  if (error) return { valid: false, reason: 'No se pudo comprobar el cupón' };
+  return (data || { valid: false, reason: 'Cupón no válido' }) as CouponValidationResult;
+}
+
+export async function recordCouponUse(code: string): Promise<void> {
+  const clean = code.trim().toUpperCase();
+  if (!clean) return;
+  await supabase.rpc('record_coupon_use', { p_code: clean }).then(() => undefined, () => undefined);
+}
+
+export async function fetchCoupons(): Promise<Coupon[]> {
+  const { data, error } = await supabase
+    .from('coupons')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((c) => ({
+    ...c,
+    discount_value: Number(c.discount_value) || 0,
+    min_order_usd: Number(c.min_order_usd) || 0,
+    uses_count: Number(c.uses_count) || 0,
+  })) as Coupon[];
+}
+
+export async function saveCoupon(
+  coupon: Omit<Coupon, 'id' | 'created_at' | 'uses_count'> & { id?: string }
+): Promise<Coupon> {
+  const payload = {
+    code: coupon.code.trim().toUpperCase().replace(/\s+/g, ''),
+    discount_type: coupon.discount_type,
+    discount_value: coupon.discount_value,
+    department: coupon.department || 'all',
+    min_order_usd: coupon.min_order_usd || 0,
+    is_reseller_vip: Boolean(coupon.is_reseller_vip),
+    vip_label: (coupon.vip_label || '').trim(),
+    max_uses: coupon.max_uses ?? null,
+    expires_at: coupon.expires_at || null,
+    active: coupon.active !== false,
+  };
+  if (coupon.id) {
+    const { data, error } = await supabase
+      .from('coupons')
+      .update(payload)
+      .eq('id', coupon.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as Coupon;
+  }
+  const { data, error } = await supabase.from('coupons').insert(payload).select('*').single();
+  if (error) throw error;
+  return data as Coupon;
+}
+
+export async function deleteCoupon(id: string): Promise<void> {
+  const { error } = await supabase.from('coupons').delete().eq('id', id);
   if (error) throw error;
 }
 
