@@ -56,7 +56,25 @@ export const onRequest = async (context: PagesContext) => {
   const isProductRoute = /^\/p\/[A-Za-z0-9_-]+\/?$/i.test(reqUrl.pathname);
 
   if (!sku) {
-    return context.next();
+    const res = await context.next();
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('text/html') || !reqUrl.search) {
+      return res;
+    }
+    const HTMLRewriterCtor = (globalThis as unknown as {
+      HTMLRewriter?: new () => {
+        on: (sel: string, handler: unknown) => unknown;
+        transform: (r: Response) => Response;
+      };
+    }).HTMLRewriter;
+    if (!HTMLRewriterCtor) return res;
+    const rw = new HTMLRewriterCtor();
+    rw.on('meta[property="og:url"]', {
+      element(el: { setAttribute: (n: string, v: string) => void }) {
+        el.setAttribute('content', reqUrl.toString());
+      },
+    });
+    return rw.transform(res);
   }
 
   // Always serve clean SPA HTML on /p/SKU routes, or normal downstream on /?sku=SKU

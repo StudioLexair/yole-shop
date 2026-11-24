@@ -39,7 +39,12 @@
 /og-default.jpg
   ! Cross-Origin-Resource-Policy
   Cross-Origin-Resource-Policy: cross-origin
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=3600
+
+/og-catalog.jpg
+  ! Cross-Origin-Resource-Policy
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=3600
 
 /favicon.ico
   ! Cross-Origin-Resource-Policy
