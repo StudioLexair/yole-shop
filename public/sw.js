@@ -1,10 +1,13 @@
-const CACHE_SHELL = 'yole-shell-v12';
-const CACHE_MEDIA = 'yole-media-v12';
-const CACHE_API = 'yole-api-v12';
+const CACHE_SHELL = 'yole-shell-v13';
+const CACHE_MEDIA = 'yole-media-v13';
+const CACHE_API = 'yole-api-v13';
 
 const SHELL_URLS = [
   '/',
   '/manifest.webmanifest',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/favicon-64x64.png',
   '/favicon.svg',
   '/brand-mark.webp',
   '/brand-logo.webp',

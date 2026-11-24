@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from './App';
+import { SplashLoader } from './components/SplashLoader';
 import { writeCachedStoreData } from './lib/catalog';
 import { DEFAULT_SETTINGS, type Category, type Product } from './types';
 
@@ -309,5 +310,19 @@ describe('Yole Shop App', () => {
     const inputCtxEv = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
     fireEvent(searchInput, inputCtxEv);
     expect(inputCtxEv.defaultPrevented).toBe(false);
+
+    // No existen botones ni accesos públicos a /admin en la tienda ni en el menú
+    expect(screen.queryByRole('button', { name: /Administrar/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }));
+    const sheet = screen.getByRole('dialog', { name: 'Menú principal' });
+    expect(within(sheet).queryByRole('button', { name: /Administrar/i })).not.toBeInTheDocument();
+  });
+
+  it('muestra la pantalla de presentación Yole Shop con el emblema oficial del lobo y contador de artículos', () => {
+    render(<SplashLoader visible productCount={266} />);
+    expect(screen.getByRole('status', { name: 'Cargando Yole Shop' })).toBeInTheDocument();
+    expect(screen.getByText('YOLE SHOP')).toBeInTheDocument();
+    expect(screen.getByText(/\+266 Artículos/i)).toBeInTheDocument();
+    expect(screen.getByText(/Santa Clara · Edición Oficial/i)).toBeInTheDocument();
   });
 });

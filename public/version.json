@@ -1,13 +1,13 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "buildId": "local",
-  "releasedAt": "2026-11-24T15:00:00Z",
+  "releasedAt": "2026-11-24T15:10:00Z",
   "mandatory": true,
   "title": "¡Actualización disponible!",
-  "description": "Actualiza Yole Shop para cargar las nuevas funciones, diseño mejorado y catálogo al día.",
+  "description": "Actualiza Yole Shop para cargar la nueva presentación de inicio, el icono oficial del lobo en pestaña y los precios actualizados.",
   "features": [
-    "Nuevo emblema oficial Yole Shop con mejoras visuales",
-    "Modo oscuro y claro corregido al 100% en tienda y panel",
-    "Sistema automático de versiones para recibir mejoras al instante"
+    "Nueva pantalla de presentación Yole Shop (4.5s)",
+    "Icono oficial del lobo en la pestaña y PWA",
+    "Precios actualizados en relojes y audífonos"
   ]
 }

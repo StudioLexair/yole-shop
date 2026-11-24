@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Download,
   Heart,
-  Lock,
   MapPin,
   MessageCircle,
   Moon,
@@ -39,7 +38,6 @@ interface BottomMenuSheetProps {
   onSelectDept: (dep: Department | 'all') => void;
   onSelectSheinGender: (g: 'all' | 'mujer' | 'hombre') => void;
   onChangeCurrency: (c: Currency) => void;
-  onOpenAdmin: () => void;
   directWaUrl: string;
   canPromptInstall: boolean;
   isInstalled: boolean;
@@ -62,7 +60,6 @@ export function BottomMenuSheet({
   onSelectDept,
   onSelectSheinGender,
   onChangeCurrency,
-  onOpenAdmin,
   directWaUrl,
   canPromptInstall,
   isInstalled,
@@ -321,29 +318,18 @@ export function BottomMenuSheet({
             )}
           </div>
 
-          {/* WhatsApp y Admin */}
-          <div className="sheet-footer-actions">
+          {/* Contacto directo WhatsApp */}
+          <div className="sheet-footer-actions sheet-footer-actions--single">
             <a
               href={directWaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn btn--whatsapp"
+              className="btn btn--whatsapp btn--block"
               onClick={onClose}
             >
               <MessageCircle size={17} />
-              <span>WhatsApp</span>
+              <span>Escribir por WhatsApp</span>
             </a>
-            <button
-              type="button"
-              className="btn btn--outline-dark"
-              onClick={() => {
-                onClose();
-                onOpenAdmin();
-              }}
-            >
-              <Lock size={16} />
-              <span>Administrar</span>
-            </button>
           </div>
 
           <a

@@ -4,7 +4,6 @@ import {
   ArrowUp,
   Download,
   Flame,
-  Lock,
   Menu,
   MessageCircle,
   Search,
@@ -96,10 +95,10 @@ export function App() {
   );
   const [loading, setLoading] = useState(() => !initialCache);
   const [minSplashDone, setMinSplashDone] = useState(
-    () => Boolean(initialCache) || import.meta.env.MODE === 'test'
+    () => isAdminPath() || import.meta.env.MODE === 'test'
   );
   const [splashMounted, setSplashMounted] = useState(
-    () => !initialCache && import.meta.env.MODE !== 'test'
+    () => !isAdminPath() && import.meta.env.MODE !== 'test'
   );
   const [loadError, setLoadError] = useState('');
 
@@ -300,14 +299,18 @@ export function App() {
   };
 
   useEffect(() => {
-    if (import.meta.env.MODE === 'test') return;
-    const t = setTimeout(() => setMinSplashDone(true), 750);
+    if (import.meta.env.MODE === 'test' || isAdmin) {
+      setMinSplashDone(true);
+      setSplashMounted(false);
+      return;
+    }
+    const t = setTimeout(() => setMinSplashDone(true), 4400);
     return () => clearTimeout(t);
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!loading && minSplashDone) {
-      const t = setTimeout(() => setSplashMounted(false), 380);
+      const t = setTimeout(() => setSplashMounted(false), 460);
       return () => clearTimeout(t);
     }
   }, [loading, minSplashDone]);
@@ -636,7 +639,8 @@ export function App() {
       {splashMounted && (
         <SplashLoader
           visible={loading || !minSplashDone}
-          label={loading ? 'Cargando catálogo...' : 'Colección lista'}
+          productCount={products.length}
+          label={loading ? 'Conectando catálogo oficial...' : 'Colección verificada · Todo listo'}
         />
       )}
       {/* Main Header — una sola fila superior limpia */}
@@ -1296,14 +1300,6 @@ export function App() {
               <MessageCircle size={17} />
               <span>Escribir por WhatsApp</span>
             </a>
-            <button
-              type="button"
-              className="btn-admin-link"
-              onClick={() => navigateAdmin(true)}
-            >
-              <Lock size={14} />
-              <span>Administrar tienda</span>
-            </button>
           </div>
         </div>
       </footer>
@@ -1419,7 +1415,6 @@ export function App() {
         onSelectDept={handleSelectDept}
         onSelectSheinGender={handleSelectSheinGender}
         onChangeCurrency={setDisplayCurrency}
-        onOpenAdmin={() => navigateAdmin(true)}
         directWaUrl={directWaUrl}
         canPromptInstall={Boolean(installPrompt)}
         isInstalled={isInstalled}
