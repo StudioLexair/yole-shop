@@ -343,6 +343,17 @@ export function BottomMenuSheet({
               <span>Administrar</span>
             </button>
           </div>
+
+          <a
+            href="https://studiolexair.ddns.net/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sheet-studio-credit"
+          >
+            <span>Tienda hecha por</span>
+            <strong>Studio Lexair</strong>
+            <span>· studiolexair.ddns.net</span>
+          </a>
         </div>
       </div>
     </div>

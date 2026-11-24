@@ -4464,4 +4464,137 @@ button, input, select, textarea {
   background: rgba(245, 158, 11, 0.14);
 }
 
+/* ===== Blindaje visual y anti-copia nivel Studio Lexair ===== */
+html,
+body,
+body * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+img,
+svg,
+picture,
+video,
+canvas {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable='true'],
+[data-copiable],
+[data-copiable] * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+.guard-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  max-width: calc(100vw - 32px);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+:root[data-theme='dark'] .guard-toast {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* ===== Atribución Studio Lexair & Slot de Anuncios ===== */
+.lexair-ad-slot-wrap {
+  margin-top: 22px;
+}
+
+.footer-studio-credit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.footer-studio-link {
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.footer-studio-link:hover {
+  text-decoration: underline;
+}
+
+.footer-studio-dot {
+  opacity: 0.55;
+}
+
+.footer-studio-place {
+  font-weight: 600;
+}
+
+:root[data-theme='dark'] .footer-studio-credit {
+  background: #18181b;
+  border-color: #27272a;
+  color: #a1a1aa;
+}
+
+:root[data-theme='dark'] .footer-studio-link {
+  color: #fafafa;
+}
+
+.sheet-studio-credit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft, #f7f7f8);
+  color: var(--muted);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.sheet-studio-credit strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+:root[data-theme='dark'] .sheet-studio-credit {
+  background: #18181b;
+  border-color: #27272a;
+}
+
+:root[data-theme='dark'] .sheet-studio-credit strong {
+  color: #fafafa;
+}
+
+
 

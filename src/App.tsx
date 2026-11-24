@@ -50,6 +50,7 @@ import { FloatingCartButton } from './components/FloatingCartButton';
 import { BottomMenuSheet } from './components/BottomMenuSheet';
 import { SmartImage } from './components/SmartImage';
 import { FilterSheet } from './components/FilterSheet';
+import { ContentGuard } from './components/ContentGuard';
 import {
   buildSearchLexicon,
   buildSearchSuggestions,
@@ -572,21 +573,25 @@ export function App() {
 
   if (isAdmin) {
     return (
-      <Suspense fallback={<SplashLoader visible label="Cargando panel administrador..." />}>
-        <AdminView
-          settings={settings}
-          categories={categories}
-          products={products}
-          pricePresets={pricePresets}
-          onRefresh={refreshData}
-          onBackToStore={() => navigateAdmin(false)}
-        />
-      </Suspense>
+      <>
+        <ContentGuard />
+        <Suspense fallback={<SplashLoader visible label="Cargando panel administrador..." />}>
+          <AdminView
+            settings={settings}
+            categories={categories}
+            products={products}
+            pricePresets={pricePresets}
+            onRefresh={refreshData}
+            onBackToStore={() => navigateAdmin(false)}
+          />
+        </Suspense>
+      </>
     );
   }
 
   return (
     <div className="app-shell">
+      <ContentGuard />
       {splashMounted && (
         <SplashLoader
           visible={loading || !minSplashDone}
@@ -1210,6 +1215,11 @@ export function App() {
             )}
           </>
         )}
+
+        {/* Espacio nativo para anuncios integrados de Studio Lexair Ads */}
+        <div className="lexair-ad-slot-wrap">
+          <div data-lexair-ad-slot="inline" />
+        </div>
       </main>
 
       {/* Footer */}
@@ -1219,6 +1229,19 @@ export function App() {
             <strong>{settings.store_name.toUpperCase()}</strong>
             <p>{settings.tagline}</p>
             <p className="footer-policy">{settings.no_returns_notice}</p>
+            <div className="footer-studio-credit">
+              <span>Tienda online hecha por</span>
+              <a
+                href="https://studiolexair.ddns.net/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="footer-studio-link"
+              >
+                Studio Lexair
+              </a>
+              <span className="footer-studio-dot" aria-hidden="true">·</span>
+              <span className="footer-studio-place">Cuba</span>
+            </div>
           </div>
           <div className="footer-right">
             <a

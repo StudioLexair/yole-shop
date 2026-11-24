@@ -276,4 +276,37 @@ describe('Yole Shop App', () => {
     fireEvent.click(within(lightbox).getByRole('button', { name: 'Cerrar vista ampliada' }));
     expect(screen.queryByRole('dialog', { name: /Foto ampliada/i })).not.toBeInTheDocument();
   });
+
+  it('incluye atribución a Studio Lexair, slot de anuncios y protección anti-copia/click derecho', async () => {
+    const { container } = render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+    });
+
+    // Atribución visible en footer + enlace a Studio Lexair
+    const creditLinks = screen.getAllByRole('link', { name: /Studio Lexair/i });
+    expect(creditLinks.some((a) => a.getAttribute('href') === 'https://studiolexair.ddns.net/')).toBe(true);
+
+    // Slot inline para anuncios de Studio Lexair Ads
+    expect(container.querySelector('[data-lexair-ad-slot="inline"]')).toBeInTheDocument();
+
+    // Protección anti-click derecho, anti-copia y atajos de inspección sin bloquear inputs
+    const titleEl = screen.getByText('New Balance 9060 Blanco & Rosa');
+    const ctxEv = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    fireEvent(titleEl, ctxEv);
+    expect(ctxEv.defaultPrevented).toBe(true);
+    expect(
+      screen.getByText(/Contenido y diseño protegidos · Yole Shop por Studio Lexair/i)
+    ).toBeInTheDocument();
+
+    const f12Ev = new KeyboardEvent('keydown', { key: 'F12', bubbles: true, cancelable: true });
+    fireEvent(document, f12Ev);
+    expect(f12Ev.defaultPrevented).toBe(true);
+
+    // En el buscador sí se permite click derecho/copiar/pegar con normalidad
+    const searchInput = screen.getByRole('searchbox', { name: 'Buscar en todo el catálogo' });
+    const inputCtxEv = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    fireEvent(searchInput, inputCtxEv);
+    expect(inputCtxEv.defaultPrevented).toBe(false);
+  });
 });

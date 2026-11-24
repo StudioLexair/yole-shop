@@ -1,6 +1,6 @@
-const CACHE_SHELL = 'yole-shell-v8';
-const CACHE_MEDIA = 'yole-media-v8';
-const CACHE_API = 'yole-api-v8';
+const CACHE_SHELL = 'yole-shell-v9';
+const CACHE_MEDIA = 'yole-media-v9';
+const CACHE_API = 'yole-api-v9';
 
 const SHELL_URLS = [
   '/',
@@ -94,8 +94,14 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Never intercept Supabase auth endpoints
-  if (url.pathname.includes('/auth/v1/')) return;
+  // Never intercept Supabase auth endpoints or Studio Lexair Ads network
+  if (
+    url.pathname.includes('/auth/v1/') ||
+    url.pathname.includes('/functions/v1/') ||
+    url.hostname === 'studiolexair.ddns.net'
+  ) {
+    return;
+  }
 
   // Navigation requests (SPA): instant cached shell + silent background update when online
   if (request.mode === 'navigate') {
@@ -103,17 +109,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Supabase Storage WebP product images & app images: cache-first + silent background refresh
+  // Own Supabase Storage WebP product images & same-origin images
   if (
-    url.pathname.includes('/storage/v1/object/public/') ||
-    request.destination === 'image'
+    (url.hostname === 'lroyrrgcjjtijwutykzm.supabase.co' &&
+      url.pathname.includes('/storage/v1/object/public/')) ||
+    (url.origin === self.location.origin && request.destination === 'image')
   ) {
     event.respondWith(staleWhileRevalidate(event, request, CACHE_MEDIA));
     return;
   }
 
-  // Supabase REST GET queries: network-first when online, cached silently when offline
-  if (url.hostname.endsWith('supabase.co') && url.pathname.includes('/rest/v1/')) {
+  // Own Supabase REST GET queries: network-first when online, cached silently when offline
+  if (
+    url.hostname === 'lroyrrgcjjtijwutykzm.supabase.co' &&
+    url.pathname.includes('/rest/v1/')
+  ) {
     event.respondWith(networkFirstWithCache(request, CACHE_API));
     return;
   }
