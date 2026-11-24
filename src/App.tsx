@@ -3,6 +3,8 @@ import { lazySafe } from './lib/lazySafe';
 import {
   ArrowRight,
   ArrowUp,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Flame,
   Menu,
@@ -277,6 +279,33 @@ export function App() {
   const [searchFocused, setSearchFocused] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const bannersRowRef = useRef<HTMLDivElement | null>(null);
+  const [bannerScrollState, setBannerScrollState] = useState({
+    canPrev: false,
+    canNext: true,
+    activeDot: 0,
+  });
+
+  const syncBannerScrollState = useCallback(() => {
+    const el = bannersRowRef.current;
+    if (!el) return;
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+    const left = el.scrollLeft;
+    const ratio = maxScroll > 4 ? left / maxScroll : 0;
+    const activeDot = Math.min(4, Math.max(0, Math.round(ratio * 4)));
+    setBannerScrollState({
+      canPrev: left > 8,
+      canNext: maxScroll - left > 8,
+      activeDot,
+    });
+  }, []);
+
+  const scrollBannersBy = useCallback((dir: -1 | 1) => {
+    const el = bannersRowRef.current;
+    if (!el) return;
+    const step = Math.max(200, Math.round(el.clientWidth * 0.68));
+    el.scrollBy({ left: dir * step, behavior: 'smooth' });
+  }, []);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -1204,7 +1233,43 @@ export function App() {
             </div>
           </div>
 
-          <div className="banners-grid">
+          <div className="banners-mobile-bar" aria-label="Navegación de departamentos">
+            <div className="banners-mobile-bar__hint">
+              <span>Desliza las 5 categorías</span>
+              <div className="banners-dots" aria-hidden="true">
+                {[0, 1, 2, 3, 4].map((dot) => (
+                  <span
+                    key={dot}
+                    className={bannerScrollState.activeDot === dot ? 'is-active' : ''}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="banners-nav-btns">
+              <button
+                type="button"
+                aria-label="Categoría anterior"
+                disabled={!bannerScrollState.canPrev}
+                onClick={() => scrollBannersBy(-1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="Siguiente categoría"
+                disabled={!bannerScrollState.canNext}
+                onClick={() => scrollBannersBy(1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={bannersRowRef}
+            className="banners-grid"
+            onScroll={syncBannerScrollState}
+          >
             <button
               type="button"
               className={`col-banner${department === 'calzado' ? ' is-selected' : ''}`}
