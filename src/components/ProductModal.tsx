@@ -400,11 +400,11 @@ export function ProductModal({
               <div className="modal-actions">
                 <button
                   type="button"
-                  className="btn btn--primary btn--lg"
+                  className="btn btn--primary btn--modal"
                   disabled={isSoldOut}
                   onClick={handleAdd}
                 >
-                  {added ? <Check size={18} /> : <ShoppingBag size={18} />}
+                  {added ? <Check size={16} /> : <ShoppingBag size={16} />}
                   <span>{added ? '¡Agregado!' : 'Agregar al carrito'}</span>
                 </button>
 
@@ -412,10 +412,10 @@ export function ProductModal({
                   href={waUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn btn--whatsapp btn--lg"
+                  className="btn btn--whatsapp btn--modal"
                   onClick={() => onWhatsAppClick?.(product)}
                 >
-                  <MessageCircle size={18} />
+                  <MessageCircle size={16} />
                   <span>Preguntar por WhatsApp</span>
                 </a>
               </div>
