@@ -3236,7 +3236,8 @@ button, input, select, textarea {
   border-color: var(--ink);
 }
 
-.recent-card__thumb {
+.recent-card__thumb,
+.smart-img-wrap.recent-card__thumb {
   width: 44px;
   height: 50px;
   border-radius: 6px;
@@ -3245,6 +3246,7 @@ button, input, select, textarea {
 }
 
 .recent-card__meta {
+  flex: 1;
   min-width: 0;
 }
 
@@ -4016,7 +4018,16 @@ button, input, select, textarea {
   overflow: hidden;
 }
 
-.cart-item__thumb {
+.smart-img-wrap.recent-card__thumb {
+  width: 44px;
+  height: 50px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.cart-item__thumb,
+.smart-img-wrap.cart-item__thumb {
   width: 68px;
   height: 82px;
   border-radius: 6px;

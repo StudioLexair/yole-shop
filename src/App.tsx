@@ -1556,6 +1556,8 @@ export function App() {
                       src={rp.image_url}
                       alt={rp.title}
                       loading="lazy"
+                      width={44}
+                      height={50}
                       variant="compact"
                       wrapperClassName="recent-card__thumb"
                     />

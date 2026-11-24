@@ -1,13 +1,12 @@
 {
-  "version": "1.4.1",
+  "version": "1.4.2",
   "buildId": "local",
-  "releasedAt": "2026-11-16T18:55:00Z",
+  "releasedAt": "2026-11-16T19:05:00Z",
   "mandatory": false,
-  "title": "¡Optimización de velocidad y rendimiento!",
-  "description": "Carga ultrarrápida en móvil y PC con banners ligeros, fuente local, caché de 1 año en fotos solares y carga diferida.",
+  "title": "Ajuste visual en Vistos recientemente",
+  "description": "Corregido el tamaño compacto de las miniaturas en Vistos recientemente.",
   "features": [
-    "Banners optimizados (-82% peso inicial) y fuente Plus Jakarta Sans autoalojada",
-    "División de código (code-splitting) y carga diferida de modales y carrito",
-    "Caché de 1 año en todas las imágenes WebP de Equipos Solares"
+    "Miniaturas compactas 44×50 px alineadas correctamente junto al SKU y título",
+    "Mismo diseño limpio tanto en tema claro como oscuro"
   ]
 }
