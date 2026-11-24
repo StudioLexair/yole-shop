@@ -101,6 +101,24 @@ export function calcYoleSheinPrice(
   return Math.round((clean + markup) * 100) / 100;
 }
 
+/**
+ * Regla Yole Shop para Equipos Solares en USD:
+ * - Menos de $900 USD -> +$10 USD
+ * - $900 a $1,499 USD -> +$35 USD
+ * - $1,500 USD o más -> +$50 USD
+ */
+export function calcYoleSolarPrice(costUsd: number): number {
+  if (!Number.isFinite(costUsd) || costUsd <= 0) return 0;
+  const clean = Math.round(costUsd * 100) / 100;
+  if (clean < 900) {
+    return Math.round((clean + 10) * 100) / 100;
+  }
+  if (clean < 1500) {
+    return Math.round((clean + 35) * 100) / 100;
+  }
+  return Math.round((clean + 50) * 100) / 100;
+}
+
 export function formatCup(amount: number): string {
   const rounded = Math.round(amount);
   return `${rounded.toLocaleString('es-ES')} CUP`;

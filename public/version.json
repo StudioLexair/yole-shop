@@ -1,12 +1,13 @@
 {
-  "version": "1.4.2",
+  "version": "1.5.0",
   "buildId": "local",
-  "releasedAt": "2026-11-16T19:05:00Z",
+  "releasedAt": "2026-11-16T21:15:00Z",
   "mandatory": false,
-  "title": "Ajuste visual en Vistos recientemente",
-  "description": "Corregido el tamaño compacto de las miniaturas en Vistos recientemente.",
+  "title": "Lo más TOP renovado, Solares -USD y Buscador Inteligente Pro",
+  "description": "Ampliamos Lo más TOP con tendencias reales de todas las secciones, bajamos el margen en equipos solares menores a $900 (+$10 USD) y llevamos el buscador inteligente a otro nivel.",
   "features": [
-    "Miniaturas compactas 44×50 px alineadas correctamente junto al SKU y título",
-    "Mismo diseño limpio tanto en tema claro como oscuro"
+    "Carrusel Lo más TOP renovado con hasta 36 tendencias reales de todas las categorías (Tenis, EcoFlow, Motorinas, Shein y Accesorios)",
+    "Equipos Solares menores de $900 USD actualizados con solo +$10 USD y sin inventar precios faltantes",
+    "Buscador inteligente Pro: entiende jerga cubana, especificaciones técnicas (72V, 1024Wh, 110/220V), abreviaturas, historial reciente y rescate inteligente sin resultados"
   ]
 }

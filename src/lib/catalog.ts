@@ -19,6 +19,7 @@ import { STORAGE_BUCKET, SUPABASE_URL, supabase } from './supabase';
 import { priceInCup, priceInUsd } from './pricing';
 import {
   buildSearchLexicon,
+  matchRelaxedSmartProduct,
   matchSmartProduct,
   parseSmartQuery,
   type SearchLexicon,
@@ -90,13 +91,18 @@ export function collectAvailableSizes(products: Product[]): string[] {
   return sortSizesList(Array.from(set));
 }
 
-export function filterProducts(
+export interface FilterProductsMetaResult {
+  products: Product[];
+  usedRelaxedMatch: boolean;
+}
+
+export function filterProductsWithMeta(
   products: Product[],
   filters: CatalogFilters,
   usdToCupRate: number,
   categories: Category[] = [],
   lexicon?: SearchLexicon
-): Product[] {
+): FilterProductsMetaResult {
   const hasSearch = Boolean(filters.search.trim());
   const activeLexicon = hasSearch ? lexicon || buildSearchLexicon(products, categories) : null;
   const parsed = hasSearch && activeLexicon
@@ -104,7 +110,7 @@ export function filterProducts(
     : null;
   const scoreMap = new Map<string, number>();
 
-  const filtered = products.filter((p) => {
+  const passesStructuralFilters = (p: Product, availSizes: string[]): boolean => {
     if (p.status === 'hidden') return false;
     if (!filters.includeSoldOut && p.status === 'sold_out') return false;
     if (filters.department === 'shein_all') {
@@ -119,7 +125,6 @@ export function filterProducts(
       if (filters.calzadoSub === 'zuecos' && p.category_id !== 'zuecos-sandalias') return false;
     }
     if (filters.categoryId !== 'all' && p.category_id !== filters.categoryId) return false;
-    const availSizes = getAvailableSizes(p);
     if (filters.size !== 'all' && !availSizes.includes(filters.size)) return false;
     if (filters.onlyPriced && (p.price === null || !Number.isFinite(p.price))) return false;
     if (filters.priceRange && filters.priceRange !== 'all') {
@@ -129,6 +134,12 @@ export function filterProducts(
       if (filters.priceRange === '15to30' && (usd <= 15 || usd > 30)) return false;
       if (filters.priceRange === 'over30' && usd <= 30) return false;
     }
+    return true;
+  };
+
+  let filtered = products.filter((p) => {
+    const availSizes = getAvailableSizes(p);
+    if (!passesStructuralFilters(p, availSizes)) return false;
     if (parsed && activeLexicon) {
       const catName = activeLexicon.categoryMap.get(p.category_id)?.name || '';
       const res = matchSmartProduct(p, parsed, catName, usdToCupRate, availSizes);
@@ -138,36 +149,66 @@ export function filterProducts(
     return true;
   });
 
+  let usedRelaxedMatch = false;
+  if (filtered.length === 0 && parsed && activeLexicon && parsed.correctedTokens.length >= 2) {
+    filtered = products.filter((p) => {
+      const availSizes = getAvailableSizes(p);
+      if (!passesStructuralFilters(p, availSizes)) return false;
+      const catName = activeLexicon.categoryMap.get(p.category_id)?.name || '';
+      const res = matchRelaxedSmartProduct(p, parsed, catName, usdToCupRate, availSizes);
+      if (!res.matches) return false;
+      scoreMap.set(p.id, res.score);
+      return true;
+    });
+    usedRelaxedMatch = filtered.length > 0;
+  }
+
+  const effectiveSort: SortMode =
+    filters.sort === 'featured' && parsed?.sortIntent === 'price_asc'
+      ? 'price_asc'
+      : filters.sort;
+
   const sorted = [...filtered];
   sorted.sort((a, b) => {
     if (a.status === 'sold_out' && b.status !== 'sold_out') return 1;
     if (b.status === 'sold_out' && a.status !== 'sold_out') return -1;
 
-    if (parsed && filters.sort === 'featured') {
-      const sa = scoreMap.get(a.id) ?? 0;
-      const sb = scoreMap.get(b.id) ?? 0;
-      if (sa !== sb) return sb - sa;
-    }
-
-    if (filters.sort === 'featured') {
-      if (a.featured !== b.featured) return a.featured ? -1 : 1;
-      return a.sort_order - b.sort_order;
-    }
-    if (filters.sort === 'price_asc' || filters.sort === 'price_desc') {
+    if (effectiveSort === 'price_asc' || effectiveSort === 'price_desc') {
       const pa = priceInCup(a.price, a.currency, usdToCupRate);
       const pb = priceInCup(b.price, b.currency, usdToCupRate);
       if (pa === null && pb === null) return a.sort_order - b.sort_order;
       if (pa === null) return 1;
       if (pb === null) return -1;
-      return filters.sort === 'price_asc' ? pa - pb : pb - pa;
+      return effectiveSort === 'price_asc' ? pa - pb : pb - pa;
     }
-    if (filters.sort === 'newest') {
+
+    if (parsed && effectiveSort === 'featured') {
+      const sa = scoreMap.get(a.id) ?? 0;
+      const sb = scoreMap.get(b.id) ?? 0;
+      if (sa !== sb) return sb - sa;
+    }
+
+    if (effectiveSort === 'featured') {
+      if (a.featured !== b.featured) return a.featured ? -1 : 1;
+      return a.sort_order - b.sort_order;
+    }
+    if (effectiveSort === 'newest') {
       return (b.created_at || '').localeCompare(a.created_at || '') || b.sort_order - a.sort_order;
     }
     return a.sort_order - b.sort_order;
   });
 
-  return sorted;
+  return { products: sorted, usedRelaxedMatch };
+}
+
+export function filterProducts(
+  products: Product[],
+  filters: CatalogFilters,
+  usdToCupRate: number,
+  categories: Category[] = [],
+  lexicon?: SearchLexicon
+): Product[] {
+  return filterProductsWithMeta(products, filters, usdToCupRate, categories, lexicon).products;
 }
 
 export interface CachedStorePayload {

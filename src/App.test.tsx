@@ -625,4 +625,79 @@ describe('Yole Shop App', () => {
       within(cartDialog).getByText(/Los Equipos Solares no admiten pago por transferencia/i)
     ).toBeInTheDocument();
   });
+
+  it('intercala múltiples departamentos en Lo más TOP y muestra rescate inteligente sin resultados', async () => {
+    vi.mocked(fetchStoreData).mockResolvedValueOnce({
+      settings: DEFAULT_SETTINGS,
+      categories: [
+        ...mockCategories,
+        {
+          id: 'estaciones-energia',
+          name: 'Estaciones de Energía',
+          department: 'solares',
+          sort_order: 200,
+        },
+      ],
+      products: [
+        ...mockProducts,
+        {
+          id: 'p7',
+          sku: 'YOL-029',
+          title: 'Nike Air Force 1 Low Blanco',
+          brand: 'Nike',
+          department: 'calzado',
+          category_id: 'tenis-new-balance',
+          quality: '3A',
+          currency: 'CUP',
+          cost_price: 30000,
+          price: 30000,
+          sizes: ['40'],
+          fit_note: '',
+          image_url: 'https://example.com/af1.webp',
+          image_path: 'catalog/YOL-029.webp',
+          status: 'active',
+          featured: true,
+          source_group: 'bombazo_calzado',
+          sort_order: 12,
+        },
+        {
+          id: 'sol1',
+          sku: 'SOL-015',
+          title: 'EcoFlow Delta 2 (1024Wh)',
+          brand: 'EcoFlow',
+          department: 'solares',
+          category_id: 'estaciones-energia',
+          quality: 'Importado',
+          currency: 'USD',
+          cost_price: 780,
+          price: 790,
+          sizes: ['Disponible'],
+          fit_note: '1024Wh',
+          image_url: 'https://example.com/sol15.webp',
+          image_path: 'catalog/SOL-015.webp',
+          status: 'active',
+          featured: true,
+          source_group: 'equipos_solares',
+          sort_order: 3750,
+        },
+      ],
+    });
+
+    render(<App />);
+    const topSection = await screen.findByLabelText('Lo más TOP');
+    expect(within(topSection).getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+    expect(within(topSection).getByText('EcoFlow Delta 2 (1024Wh)')).toBeInTheDocument();
+    expect(within(topSection).getByText('Motorina TopMaq TANK 72V 45Ah')).toBeInTheDocument();
+    expect(within(topSection).getByText('Vestido Corto Satén Chocolate')).toBeInTheDocument();
+
+    // Búsqueda sin coincidencias muestra alternativas TOP y botón de consulta WhatsApp
+    const searchInput = screen.getByRole('searchbox', { name: 'Buscar en todo el catálogo' });
+    fireEvent.change(searchInput, { target: { value: 'iphone16xyz' } });
+    fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+    expect(screen.getByText(/No encontramos resultados exactos para «iphone16xyz»/i)).toBeInTheDocument();
+    expect(screen.getByText(/Alternativas más pedidas en Yole Shop/i)).toBeInTheDocument();
+    const waAsk = screen.getByRole('link', { name: /Preguntar por «iphone16xyz»/i });
+    expect(waAsk.getAttribute('href')).toContain('iphone16xyz');
+  });
 });

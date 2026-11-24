@@ -3,6 +3,7 @@ import {
   buildWhatsAppOrderLink,
   buildWhatsAppProductLink,
   calcYoleSheinPrice,
+  calcYoleSolarPrice,
   cartHasSheinItems,
   cartHasTransferBlockedItems,
   cartTransferBlockReason,
@@ -342,5 +343,17 @@ describe('pricing & WhatsApp helpers', () => {
       'transferencia'
     );
     expect(solarSummary.transferFeeCup).toBe(0);
+  });
+
+  it('aplica +10 USD a equipos solares menores de $900, +35 USD de $900-$1499 y +50 USD desde $1500', () => {
+    expect(calcYoleSolarPrice(100)).toBe(110);
+    expect(calcYoleSolarPrice(660)).toBe(670);
+    expect(calcYoleSolarPrice(780)).toBe(790);
+    expect(calcYoleSolarPrice(880)).toBe(890);
+    expect(calcYoleSolarPrice(900)).toBe(935);
+    expect(calcYoleSolarPrice(1100)).toBe(1135);
+    expect(calcYoleSolarPrice(1500)).toBe(1550);
+    expect(calcYoleSolarPrice(2250)).toBe(2300);
+    expect(calcYoleSolarPrice(0)).toBe(0);
   });
 });

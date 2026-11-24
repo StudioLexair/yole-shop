@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import {
   buildSearchLexicon,
   buildSearchSuggestions,
   parseSmartQuery,
+  pushSearchHistory,
+  readSearchHistory,
+  removeSearchHistoryItem,
+  splitHighlightParts,
 } from './smartSearch';
-import { filterProducts } from './catalog';
+import { filterProducts, filterProductsWithMeta } from './catalog';
 import type { Category, Product } from '../types';
 
 const categories: Category[] = [
@@ -13,6 +17,8 @@ const categories: Category[] = [
   { id: 'vestidos-shein', name: 'Vestidos Shein', department: 'moda_shein', sort_order: 20 },
   { id: 'moda-hombre', name: 'Moda Hombre', department: 'hombre', sort_order: 30 },
   { id: 'bolsos-relojes', name: 'Carteras y Relojes', department: 'accesorios', sort_order: 40 },
+  { id: 'motos-electricas', name: 'Motorinas Eléctricas', department: 'movilidad', sort_order: 50 },
+  { id: 'estaciones-energia', name: 'Estaciones de Energía', department: 'solares', sort_order: 60 },
 ];
 
 const products: Product[] = [
@@ -116,11 +122,74 @@ const products: Product[] = [
     source_group: 'accesorios',
     sort_order: 50,
   },
+  {
+    id: '6',
+    sku: 'VIR-001',
+    title: 'Motorina TopMaq TANK 72V 45Ah',
+    brand: 'TopMaq',
+    department: 'movilidad',
+    category_id: 'motos-electricas',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 2400,
+    price: 2450,
+    sizes: ['Negro'],
+    fit_note: 'Batería de litio 72V 45Ah',
+    image_url: 'https://x.test/tank.webp',
+    image_path: 'tank.webp',
+    status: 'active',
+    featured: true,
+    source_group: 'todo_virginia',
+    sort_order: 60,
+  },
+  {
+    id: '7',
+    sku: 'VIR-023',
+    title: 'Bicimoto Litio 48V 20Ah',
+    brand: 'Litio',
+    department: 'movilidad',
+    category_id: 'motos-electricas',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 710,
+    price: 750,
+    sizes: ['Azul'],
+    fit_note: 'Autonomía 60km',
+    image_url: 'https://x.test/bici.webp',
+    image_path: 'bici.webp',
+    status: 'active',
+    featured: false,
+    source_group: 'todo_virginia',
+    sort_order: 70,
+  },
+  {
+    id: '8',
+    sku: 'SOL-015',
+    title: 'EcoFlow Delta 2 (1800W / Pico 2700W · 1024Wh)',
+    brand: 'EcoFlow',
+    department: 'solares',
+    category_id: 'estaciones-energia',
+    quality: 'Importado',
+    currency: 'USD',
+    cost_price: 780,
+    price: 790,
+    sizes: ['Disponible'],
+    fit_note: 'Respaldo silencioso para apagones, 1024Wh LiFePO4',
+    image_url: 'https://x.test/delta2.webp',
+    image_path: 'delta2.webp',
+    status: 'active',
+    featured: true,
+    source_group: 'equipos_solares',
+    sort_order: 80,
+  },
 ];
 
 const lexicon = buildSearchLexicon(products, categories);
 
 describe('smartSearch engine', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
   it('corrige errores tipográficos y sugiere "¿Quisiste decir ...?"', () => {
     const parsedNb = parseSmartQuery('neww balance', lexicon);
     expect(parsedNb.didYouMean).toBe('New Balance');
@@ -252,5 +321,106 @@ describe('smartSearch engine', () => {
     );
     expect(typoSuggestions.didYouMean).toBe('New Balance');
     expect(typoSuggestions.topProducts.map((p) => p.sku)).toEqual(['YOL-003']);
+  });
+
+  it('entiende abreviaturas cubanas, especificaciones técnicas, typos solares y "barata" con orden económico', () => {
+    // Abreviatura j4 + especificación con espacio "72 v" / "1024 wh" / jerga "planta apagon"
+    const j4Hits = filterProducts(
+      products,
+      {
+        department: 'all',
+        categoryId: 'all',
+        size: 'all',
+        search: 'j4',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980,
+      categories,
+      lexicon
+    );
+    expect(j4Hits.map((p) => p.sku)).toEqual(['YOL-015']);
+
+    const specHits = filterProducts(
+      products,
+      {
+        department: 'all',
+        categoryId: 'all',
+        size: 'all',
+        search: 'motorina 72 v negras',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980,
+      categories,
+      lexicon
+    );
+    expect(specHits.map((p) => p.sku)).toEqual(['VIR-001']);
+
+    const apagonHits = filterProducts(
+      products,
+      {
+        department: 'all',
+        categoryId: 'all',
+        size: 'all',
+        search: 'planta apagon 1024 wh',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980,
+      categories,
+      lexicon
+    );
+    expect(apagonHits.map((p) => p.sku)).toEqual(['SOL-015']);
+
+    // "motorina barata" ordena de menor a mayor precio en lugar de filtrar <= $15
+    const cheapMotos = filterProducts(
+      products,
+      {
+        department: 'all',
+        categoryId: 'all',
+        size: 'all',
+        search: 'motorina barata',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980,
+      categories,
+      lexicon
+    );
+    expect(cheapMotos.map((p) => p.sku)).toEqual(['VIR-023', 'VIR-001']);
+
+    // Fallback inteligente cuando una búsqueda multi-palabra exacta no coincide en un término extra
+    const relaxed = filterProductsWithMeta(
+      products,
+      {
+        department: 'all',
+        categoryId: 'all',
+        size: 'all',
+        search: 'ecoflow delta 3 pro',
+        onlyPriced: false,
+        includeSoldOut: false,
+        sort: 'featured',
+      },
+      980,
+      categories,
+      lexicon
+    );
+    expect(relaxed.usedRelaxedMatch).toBe(true);
+    expect(relaxed.products.map((p) => p.sku)).toEqual(['SOL-015']);
+
+    // Resaltado e historial
+    const parts = splitHighlightParts('EcoFlow Delta 2', ['ecoflow']);
+    expect(parts.some((p) => p.hit && p.text === 'EcoFlow')).toBe(true);
+
+    pushSearchHistory('EcoFlow');
+    pushSearchHistory('Jordan 4');
+    expect(readSearchHistory()).toEqual(['Jordan 4', 'EcoFlow']);
+    removeSearchHistoryItem('EcoFlow');
+    expect(readSearchHistory()).toEqual(['Jordan 4']);
   });
 });

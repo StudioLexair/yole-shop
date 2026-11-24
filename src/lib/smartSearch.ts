@@ -10,6 +10,8 @@ export interface SearchLexicon {
   vocabPrettyMap: Map<string, string>;
 }
 
+export type SmartSortIntent = 'price_asc' | 'price_desc' | 'featured' | null;
+
 export interface ParsedSmartQuery {
   raw: string;
   normalized: string;
@@ -18,13 +20,16 @@ export interface ParsedSmartQuery {
   textTokens: string[];
   correctedTokens: string[];
   departmentHints: Department[];
+  detectedBrand: string | null;
   minUsd: number | null;
   maxUsd: number | null;
   minCup: number | null;
   maxCup: number | null;
   sizeHint: string | null;
   featuredOnlyHint: boolean;
+  sortIntent: SmartSortIntent;
   priceIntentLabel: string | null;
+  intentBadges: string[];
 }
 
 export function normalizeText(raw: string): string {
@@ -38,7 +43,6 @@ export function normalizeText(raw: string): string {
 }
 
 function collapseRepeats(token: string): string {
-  // Collapse 3+ identical chars or double trailing letters like neww -> new, nikee -> nike
   return token.replace(/(.)\1{2,}/g, '$1').replace(/([a-z])\1$/g, '$1');
 }
 
@@ -104,6 +108,9 @@ const TOKEN_ALIASES: Record<string, string> = {
   adiddas: 'adidas',
   addidas: 'adidas',
   adida: 'adidas',
+  campuss: 'campus',
+  sambaa: 'samba',
+  shoxx: 'shox',
   osirs: 'osiris',
   osiriss: 'osiris',
   champon: 'champion',
@@ -122,6 +129,75 @@ const TOKEN_ALIASES: Record<string, string> = {
   teniss: 'tenis',
   legin: 'leggings',
   legins: 'leggings',
+  ecofow: 'ecoflow',
+  ecoflo: 'ecoflow',
+  ecofloww: 'ecoflow',
+  blueti: 'bluetti',
+  bluetty: 'bluetti',
+  bluety: 'bluetti',
+  vateria: 'bateria',
+  baterya: 'bateria',
+  motrina: 'motorina',
+  motornia: 'motorina',
+  bicmoto: 'bicimoto',
+  tricico: 'triciclo',
+  tricilo: 'triciclo',
+  inbersor: 'inversor',
+  imbresor: 'inversor',
+  panell: 'panel',
+  sandlia: 'sandalia',
+  sueco: 'zueco',
+  suecos: 'zuecos',
+  audifno: 'audifonos',
+  audifono: 'audifonos',
+  pulober: 'pulover',
+  yoasaki: 'yoazaky',
+  topmak: 'topmaq',
+  unisuki: 'unizuki',
+  bedca: 'vedca',
+  bukati: 'bucatti',
+  bucati: 'bucatti',
+  lifepo: 'lifepo4',
+  lipo: 'litio',
+  lition: 'litio',
+};
+
+const COLOR_NORMALIZATIONS: Record<string, string> = {
+  negras: 'negro',
+  negros: 'negro',
+  negra: 'negro',
+  blancas: 'blanco',
+  blancos: 'blanco',
+  blanca: 'blanco',
+  rojas: 'rojo',
+  rojos: 'rojo',
+  roja: 'rojo',
+  azules: 'azul',
+  verdes: 'verde',
+  grises: 'gris',
+  rosadas: 'rosa',
+  rosados: 'rosa',
+  rosado: 'rosa',
+  rosada: 'rosa',
+  rosas: 'rosa',
+  marrones: 'marron',
+  cafes: 'cafe',
+  doradas: 'dorado',
+  dorados: 'dorado',
+  dorada: 'dorado',
+  plateadas: 'plateado',
+  plateados: 'plateado',
+  plateada: 'plateado',
+  plata: 'plata',
+  moradas: 'morado',
+  morados: 'morado',
+  morada: 'morado',
+  amarillas: 'amarillo',
+  amarillos: 'amarillo',
+  amarilla: 'amarillo',
+  vinos: 'vino',
+  beiges: 'beige',
+  cremas: 'crema',
 };
 
 const SYNONYM_GROUPS: Record<string, string[]> = {
@@ -131,54 +207,101 @@ const SYNONYM_GROUPS: Record<string, string[]> = {
   zapatillas: ['tenis', 'calzado', 'zapatillas', 'zapatos'],
   zapatilla: ['tenis', 'calzado', 'zapatillas', 'zapatos'],
   calzado: ['tenis', 'calzado', 'zapatillas', 'zapatos'],
+  zueco: ['zueco', 'zuecos', 'sandalia', 'sandalias', 'boston', 'hermes'],
+  zuecos: ['zueco', 'zuecos', 'sandalia', 'sandalias', 'boston', 'hermes'],
+  sandalia: ['sandalia', 'sandalias', 'zueco', 'zuecos', 'tacon', 'hermes'],
+  sandalias: ['sandalia', 'sandalias', 'zueco', 'zuecos', 'tacon', 'hermes'],
+  chancleta: ['zueco', 'zuecos', 'sandalia', 'sandalias', 'plana'],
+  chancletas: ['zueco', 'zuecos', 'sandalia', 'sandalias', 'plana'],
+  chancla: ['zueco', 'zuecos', 'sandalia', 'sandalias', 'plana'],
+  chanclas: ['zueco', 'zuecos', 'sandalia', 'sandalias', 'plana'],
+  crocs: ['zueco', 'zuecos', 'boston'],
+  birkenstock: ['zueco', 'zuecos', 'boston'],
+  tacon: ['tacon', 'sandalia', 'slingback'],
+  tacones: ['tacon', 'sandalia', 'slingback'],
+  bota: ['bota', 'tactica', 'militar'],
+  botas: ['bota', 'tactica', 'militar'],
   jordans: ['jordan'],
   champions: ['champion'],
   ropa: ['shein', 'vestido', 'blusa', 'sudadera', 'pantalon', 'conjunto', 'short', 'top', 'moda'],
   moda: ['shein', 'vestido', 'blusa', 'sudadera', 'pantalon', 'conjunto', 'top'],
-  mujer: ['vestido', 'blusa', 'corse', 'falda', 'leggings', 'mujer', 'shein'],
-  dama: ['vestido', 'blusa', 'corse', 'falda', 'leggings', 'mujer', 'shein'],
-  chica: ['vestido', 'blusa', 'corse', 'falda', 'leggings', 'mujer'],
-  hombre: ['hombre', 'sudadera', 'hoodie', 'camiseta', 'playera', 'bermuda'],
-  caballero: ['hombre', 'sudadera', 'hoodie', 'camiseta'],
-  chico: ['hombre', 'sudadera', 'hoodie', 'camiseta'],
+  mujer: ['vestido', 'blusa', 'corse', 'corset', 'falda', 'leggings', 'mujer', 'shein', 'sandalia', 'zueco'],
+  dama: ['vestido', 'blusa', 'corse', 'corset', 'falda', 'leggings', 'mujer', 'shein', 'sandalia'],
+  chica: ['vestido', 'blusa', 'corse', 'corset', 'falda', 'leggings', 'mujer'],
+  hombre: ['hombre', 'sudadera', 'hoodie', 'camiseta', 'playera', 'bermuda', 'pulover', 'jean', 'enguatada'],
+  caballero: ['hombre', 'sudadera', 'hoodie', 'camiseta', 'pulover'],
+  chico: ['hombre', 'sudadera', 'hoodie', 'camiseta', 'pulover'],
   bolso: ['bolso', 'cartera', 'mochila', 'bandolera'],
   bolsos: ['bolso', 'cartera', 'mochila', 'bandolera'],
   cartera: ['cartera', 'bolso', 'bandolera'],
   carteras: ['cartera', 'bolso', 'bandolera'],
-  reloj: ['reloj', 'relojes', 'olevs', 'cronografo'],
-  relojes: ['reloj', 'relojes', 'olevs', 'cronografo'],
+  reloj: ['reloj', 'relojes', 'olevs', 'casio', 'cronografo'],
+  relojes: ['reloj', 'relojes', 'olevs', 'casio', 'cronografo'],
+  audifonos: ['audifonos', 'bluetooth', 'tws', 'inalambricos', 'p9'],
+  cascos: ['audifonos', 'bluetooth', 'p9'],
+  bluetooth: ['bluetooth', 'audifonos', 'tws', 'bms'],
   sudadera: ['sudadera', 'hoodie', 'abrigo', 'sueter', 'enguatada'],
   sudaderas: ['sudadera', 'hoodie', 'abrigo', 'sueter', 'enguatada'],
   hoodie: ['hoodie', 'sudadera', 'abrigo', 'sueter'],
   hoodies: ['hoodie', 'sudadera', 'abrigo', 'sueter'],
   abrigo: ['abrigo', 'sudadera', 'hoodie', 'enguatada', 'chaqueta'],
   abrigos: ['abrigo', 'sudadera', 'hoodie', 'enguatada', 'chaqueta'],
+  pulover: ['pulover', 'camiseta', 'polo', 'oversize'],
+  pulovers: ['pulover', 'camiseta', 'polo', 'oversize'],
+  camiseta: ['camiseta', 'pulover', 'polo', 'jersey', 'oversize'],
+  camisetas: ['camiseta', 'pulover', 'polo', 'jersey', 'oversize'],
+  playera: ['camiseta', 'pulover', 'polo'],
   vestido: ['vestido', 'vestidos'],
   vestidos: ['vestido', 'vestidos'],
-  blusa: ['blusa', 'blusas', 'top', 'corse', 'camisa'],
-  blusas: ['blusa', 'blusas', 'top', 'corse', 'camisa'],
-  corset: ['corse', 'corset', 'blusa', 'top'],
-  corse: ['corse', 'corset', 'blusa', 'top'],
-  pantalon: ['pantalon', 'pantalones', 'jeans', 'mezclilla', 'leggings'],
-  pantalones: ['pantalon', 'pantalones', 'jeans', 'mezclilla', 'leggings'],
-  accesorios: ['accesorios', 'cartera', 'bolso', 'reloj', 'gafas', 'gorra'],
-  moto: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica'],
-  motos: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica'],
-  motorina: ['motorina', 'motorinas', 'moto', 'scooter', 'electrica'],
+  blusa: ['blusa', 'blusas', 'top', 'corse', 'corset', 'camisa', 'bustier'],
+  blusas: ['blusa', 'blusas', 'top', 'corse', 'corset', 'camisa', 'bustier'],
+  corset: ['corse', 'corset', 'bustier', 'blusa', 'top'],
+  corse: ['corse', 'corset', 'bustier', 'blusa', 'top'],
+  falda: ['falda', 'minifalda'],
+  saya: ['falda', 'minifalda'],
+  sayas: ['falda', 'minifalda'],
+  pantalon: ['pantalon', 'pantalones', 'jean', 'jeans', 'mezclilla', 'leggings', 'cargo', 'mono'],
+  pantalones: ['pantalon', 'pantalones', 'jean', 'jeans', 'mezclilla', 'leggings', 'cargo', 'mono'],
+  jean: ['jean', 'baggy', 'denim', 'pantalon', 'cargo'],
+  jeans: ['jean', 'baggy', 'denim', 'pantalon', 'cargo'],
+  mezclilla: ['jean', 'baggy', 'denim'],
+  licra: ['leggings', 'mono', 'jogger'],
+  accesorios: ['accesorios', 'cartera', 'bolso', 'reloj', 'audifonos', 'casio', 'olevs'],
+  moto: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica', 'chapa'],
+  motos: ['moto', 'motos', 'motorina', 'motorinas', 'motoneta', 'gasolina', 'electrica', 'chapa'],
+  motorina: ['motorina', 'motorinas', 'moto', 'scooter', 'electrica', 'bicimoto'],
+  motorinas: ['motorina', 'motorinas', 'moto', 'scooter', 'electrica', 'bicimoto'],
+  motico: ['motorina', 'bicimoto', 'bici', 'scooter'],
+  pasola: ['motorina', 'scooter', 'bicimoto'],
   bicimoto: ['bicimoto', 'bicimotos', 'bici', 'bicicleta', 'electrica'],
-  triciclo: ['triciclo', 'triciclos', 'carga', 'pasajero', 'moto'],
+  bicimotos: ['bicimoto', 'bicimotos', 'bici', 'bicicleta', 'electrica'],
+  bici: ['bici', 'bicicleta', 'bicimoto', 'plegable', 'eskute', 'tamobyke'],
+  triciclo: ['triciclo', 'triciclos', 'carga', 'pasajero', 'techo'],
+  triciclos: ['triciclo', 'triciclos', 'carga', 'pasajero', 'techo'],
   bateria: ['bateria', 'baterias', 'litio', 'lifepo4', 'polifosfato', 'gel', 'catl'],
   baterias: ['bateria', 'baterias', 'litio', 'lifepo4', 'polifosfato', 'gel', 'catl'],
-  motor: ['motor', 'motores', 'unidad', 'chapa', 'kit'],
+  pila: ['bateria', 'baterias', 'litio', 'lifepo4'],
+  litio: ['litio', 'lifepo4', 'catl', 'bateria'],
+  motor: ['motor', 'motores', 'unidad', 'chapa', 'kit', 'lifan'],
   virginia: ['virginia', 'moto', 'motorina', 'triciclo', 'bicimoto', 'bateria'],
   solar: ['solar', 'solares', 'panel', 'paneles', 'inversor', 'estacion', 'lifepo4', 'ecoflow', 'bluetti'],
   solares: ['solar', 'solares', 'panel', 'paneles', 'inversor', 'estacion', 'lifepo4', 'ecoflow', 'bluetti'],
-  panel: ['panel', 'paneles', 'solar', 'solares', 'fotovoltaico'],
-  paneles: ['panel', 'paneles', 'solar', 'solares', 'fotovoltaico'],
-  inversor: ['inversor', 'inversores', 'hibrido', 'mppt', 'powmr', 'sumry', 'must', 'kit'],
+  panel: ['panel', 'paneles', 'solar', 'solares', 'bifacial', 'longi', 'meyer'],
+  paneles: ['panel', 'paneles', 'solar', 'solares', 'bifacial', 'longi', 'meyer'],
+  placa: ['panel', 'paneles', 'solar', 'solares', 'bifacial'],
+  placas: ['panel', 'paneles', 'solar', 'solares', 'bifacial'],
+  inversor: ['inversor', 'inversores', 'hibrido', 'mppt', 'powmr', 'sumry', 'must', 'kit', 'ecoworthy'],
   inversores: ['inversor', 'inversores', 'hibrido', 'mppt', 'powmr', 'sumry', 'must', 'kit'],
   estacion: ['estacion', 'estaciones', 'ecoflow', 'bluetti', 'anker', 'ampace', 'oupes', 'aferry', 'energia', 'portatil'],
   estaciones: ['estacion', 'estaciones', 'ecoflow', 'bluetti', 'anker', 'ampace', 'oupes', 'aferry', 'energia', 'portatil'],
+  planta: ['estacion', 'ecoflow', 'bluetti', 'anker', 'ampace', 'oupes', 'aferry', 'planta', 'respaldo', 'hibrido'],
+  plantas: ['estacion', 'ecoflow', 'bluetti', 'anker', 'ampace', 'oupes', 'aferry', 'planta', 'respaldo'],
+  apagon: ['estacion', 'ecoflow', 'bluetti', 'inversor', 'respaldo', 'bateria', 'lifepo4'],
+  apagones: ['estacion', 'ecoflow', 'bluetti', 'inversor', 'respaldo', 'bateria', 'lifepo4'],
+  respaldo: ['respaldo', 'estacion', 'inversor', 'bateria', 'ecoflow', 'bluetti', 'must'],
+  bifasico: ['110', '220', 'fase', 'dividida', 'inversor', 'hibrido'],
+  '220v': ['220v', '220', 'fase', 'dividida', '110/220v'],
+  '110v': ['110v', '110', '110/220v'],
 };
 
 const STOP_WORDS = new Set([
@@ -189,18 +312,84 @@ const STOP_WORDS = new Set([
   'las',
   'un',
   'una',
+  'unos',
+  'unas',
   'para',
   'con',
   'sin',
   'en',
   'por',
   'del',
+  'al',
   'y',
   'o',
   'que',
   'quiero',
   'busco',
+  'necesito',
+  'dame',
+  'ver',
+  'mostrar',
+  'cual',
+  'cuales',
+  'tienes',
+  'hay',
 ]);
+
+const CURATED_VOCAB: ReadonlyArray<readonly [string, string]> = [
+  ['jordan', 'Jordan'],
+  ['new', 'New'],
+  ['balance', 'Balance'],
+  ['nike', 'Nike'],
+  ['adidas', 'Adidas'],
+  ['campus', 'Campus'],
+  ['samba', 'Samba'],
+  ['shox', 'Shox'],
+  ['osiris', 'Osiris'],
+  ['champion', 'Champion'],
+  ['shein', 'SHEIN'],
+  ['dior', 'Dior'],
+  ['casio', 'Casio'],
+  ['olevs', 'Olevs'],
+  ['vestido', 'Vestido'],
+  ['vestidos', 'Vestidos'],
+  ['blusa', 'Blusa'],
+  ['sudadera', 'Sudadera'],
+  ['hoodie', 'Hoodie'],
+  ['pulover', 'Pulóver'],
+  ['cartera', 'Cartera'],
+  ['reloj', 'Reloj'],
+  ['audifonos', 'Audífonos'],
+  ['pantalon', 'Pantalón'],
+  ['tenis', 'Tenis'],
+  ['zueco', 'Zueco'],
+  ['zuecos', 'Zuecos'],
+  ['sandalia', 'Sandalia'],
+  ['sandalias', 'Sandalias'],
+  ['accesorios', 'Accesorios'],
+  ['solares', 'Equipos Solares'],
+  ['panel', 'Panel Solar'],
+  ['inversor', 'Inversor'],
+  ['ecoflow', 'EcoFlow'],
+  ['bluetti', 'Bluetti'],
+  ['anker', 'Anker'],
+  ['ampace', 'Ampace'],
+  ['humsienk', 'Humsienk'],
+  ['powmr', 'PowMr'],
+  ['sumry', 'Sumry'],
+  ['lifepo4', 'LiFePO4'],
+  ['bateria', 'Batería'],
+  ['motorina', 'Motorina'],
+  ['bicimoto', 'Bicimoto'],
+  ['triciclo', 'Triciclo'],
+  ['topmaq', 'TopMaq'],
+  ['yoazaky', 'Yoazaky'],
+  ['unizuki', 'Unizuki'],
+  ['vedca', 'Vedca'],
+  ['bucatti', 'Bucatti'],
+  ['lifan', 'Lifan'],
+  ['kivitova', 'Kivitova'],
+];
 
 export function buildSearchLexicon(products: Product[], categories: Category[]): SearchLexicon {
   const brandNormMap = new Map<string, string>();
@@ -233,8 +422,8 @@ export function buildSearchLexicon(products: Product[], categories: Category[]):
         registerWord(part, part.charAt(0).toUpperCase() + part.slice(1));
       }
     }
-    const titleParts = p.title.split(/\s+/);
-    for (const rawWord of titleParts) {
+    const textSources = [p.title, p.fit_note || ''].join(' ');
+    for (const rawWord of textSources.split(/\s+/)) {
       const nw = normalizeText(rawWord);
       if (nw && !/^\d+$/.test(nw) && !STOP_WORDS.has(nw)) {
         registerWord(nw, rawWord.replace(/[^\p{L}\p{N}-]/gu, ''));
@@ -242,34 +431,8 @@ export function buildSearchLexicon(products: Product[], categories: Category[]):
     }
   }
 
-  // Ensure key domain words exist even on small/filtered mocks
-  for (const base of [
-    ['jordan', 'Jordan'],
-    ['new', 'New'],
-    ['balance', 'Balance'],
-    ['nike', 'Nike'],
-    ['adidas', 'Adidas'],
-    ['osiris', 'Osiris'],
-    ['champion', 'Champion'],
-    ['shein', 'SHEIN'],
-    ['dior', 'Dior'],
-    ['vestido', 'Vestido'],
-    ['vestidos', 'Vestidos'],
-    ['blusa', 'Blusa'],
-    ['sudadera', 'Sudadera'],
-    ['hoodie', 'Hoodie'],
-    ['cartera', 'Cartera'],
-    ['reloj', 'Reloj'],
-    ['pantalon', 'Pantalón'],
-    ['tenis', 'Tenis'],
-    ['accesorios', 'Accesorios'],
-    ['solares', 'Equipos Solares'],
-    ['panel', 'Panel Solar'],
-    ['inversor', 'Inversor'],
-    ['ecoflow', 'EcoFlow'],
-    ['bluetti', 'Bluetti'],
-  ] as const) {
-    registerWord(base[0], base[1]);
+  for (const [key, pretty] of CURATED_VOCAB) {
+    registerWord(key, pretty);
   }
 
   return {
@@ -286,30 +449,38 @@ function correctSingleToken(
   token: string,
   lexicon: SearchLexicon
 ): { corrected: string; changed: boolean } {
-  if (!token || /^\d+(\.\d+)?$/.test(token) || token.startsWith('yol-')) {
+  if (!token || /^\d+(\.\d+)?$/.test(token) || /^(yol|vir|sol)-/.test(token)) {
     return { corrected: token, changed: false };
   }
   if (STOP_WORDS.has(token)) {
     return { corrected: token, changed: false };
   }
 
-  // Exact known vocabulary or synonym key
-  if (lexicon.vocabPrettyMap.has(token) || SYNONYM_GROUPS[token]) {
+  // Exact known vocabulary or synonym key or color
+  if (
+    lexicon.vocabPrettyMap.has(token) ||
+    SYNONYM_GROUPS[token] ||
+    COLOR_NORMALIZATIONS[token]
+  ) {
     return { corrected: token, changed: false };
   }
 
-  // Direct alias map (neww -> new, yordan -> jordan, shien -> shein)
+  // Direct alias map (neww -> new, yordan -> jordan, shien -> shein, ecofow -> ecoflow)
   if (TOKEN_ALIASES[token]) {
     return { corrected: TOKEN_ALIASES[token], changed: true };
   }
 
-  // Collapsed repeats (nikee -> nike, neww -> new)
+  // Collapsed repeats (nikee -> nike, neww -> new, campuss -> campus)
   const squeezed = collapseRepeats(token);
-  if (squeezed !== token && (lexicon.vocabPrettyMap.has(squeezed) || TOKEN_ALIASES[squeezed])) {
+  if (
+    squeezed !== token &&
+    (lexicon.vocabPrettyMap.has(squeezed) ||
+      SYNONYM_GROUPS[squeezed] ||
+      TOKEN_ALIASES[squeezed])
+  ) {
     return { corrected: TOKEN_ALIASES[squeezed] || squeezed, changed: true };
   }
 
-  // Only attempt edit distance for words >= 4 chars
   if (token.length < 4) {
     return { corrected: token, changed: false };
   }
@@ -338,7 +509,6 @@ function correctSingleToken(
 
 function formatSuggestionPhrase(tokens: string[], lexicon: SearchLexicon): string {
   const joined = tokens.join(' ');
-  // Known brand casing check (e.g., "new balance" -> "New Balance", "shein" -> "SHEIN")
   for (const [normBrand, prettyBrand] of lexicon.brandNormMap.entries()) {
     if (joined === normBrand) return prettyBrand;
   }
@@ -347,31 +517,55 @@ function formatSuggestionPhrase(tokens: string[], lexicon: SearchLexicon): strin
     .join(' ');
 }
 
+function parseNumericToken(rawNum: string, hasMil?: string): number {
+  const clean = rawNum.replace(/,/g, '');
+  const base = parseFloat(clean);
+  if (!Number.isFinite(base)) return 0;
+  return hasMil ? base * 1000 : base;
+}
+
+function expandSlangAndUnits(normalized: string): string {
+  return normalized
+    .replace(/\bnb\b/g, 'new balance')
+    .replace(/\baf1\b|\bairforce\b/g, 'air force 1')
+    .replace(/\baj4\b|\bj4\b/g, 'jordan 4')
+    .replace(/\baj1\b|\bj1\b/g, 'jordan 1')
+    .replace(/\baj13\b|\bj13\b/g, 'jordan 13')
+    .replace(/\beco\s+flow\b/g, 'ecoflow')
+    .replace(/\bdelta(\d)\b/g, 'delta $1')
+    .replace(/\briver(\d)\b/g, 'river $1')
+    .replace(/\b(\d+(?:\.\d+)?)\s*(volts|voltios|volt|v)\b/g, '$1v')
+    .replace(/\b(\d+(?:\.\d+)?)\s*(watts|watt|w)\b/g, '$1w')
+    .replace(/\b(\d+(?:\.\d+)?)\s*(wh|watt horas|watts horas)\b/g, '$1wh')
+    .replace(/\b(\d+(?:\.\d+)?)\s*(kw)\b/g, '$1kw')
+    .replace(/\b(\d+(?:\.\d+)?)\s*(kwh)\b/g, '$1kwh')
+    .replace(/\b(\d+(?:\.\d+)?)\s*(amperes|amp|ah)\b/g, '$1ah')
+    .replace(/\b(\d+)\s*cc\b/g, '$1cc');
+}
+
 export function parseSmartQuery(
   rawQuery: string,
   lexicon: SearchLexicon
 ): ParsedSmartQuery {
-  let working = normalizeText(rawQuery);
+  let working = expandSlangAndUnits(normalizeText(rawQuery));
   let minUsd: number | null = null;
   let maxUsd: number | null = null;
   let minCup: number | null = null;
   let maxCup: number | null = null;
   let sizeHint: string | null = null;
   let featuredOnlyHint = false;
+  let sortIntent: SmartSortIntent = null;
   let priceIntentLabel: string | null = null;
 
-  // Shorthand "nb" -> "new balance"
-  working = working.replace(/\bnb\b/g, 'new balance');
-
-  // Range: "entre 15 y 30" or "15 a 30 usd"
+  // Range: "entre 15 y 30", "500 a 1,500 usd", "entre 20mil y 35mil cup"
   const rangeMatch = working.match(
-    /(?:entre\s+)?(\d+(?:\.\d+)?)\s*(?:y|a|-)\s*(\d+(?:\.\d+)?)\s*(usd|cup|\$)?/
+    /(?:entre\s+)?\$?\s*(\d+(?:[.,]\d+)?)\s*(mil|k)?\s*(?:y|a|-)\s*\$?\s*(\d+(?:[.,]\d+)?)\s*(mil|k)?\s*(usd|dolares|cup|pesos|\$)?/
   );
   if (rangeMatch) {
-    const a = parseFloat(rangeMatch[1]);
-    const b = parseFloat(rangeMatch[2]);
-    const unit = rangeMatch[3];
-    if (unit === 'cup' || b >= 500) {
+    const a = parseNumericToken(rangeMatch[1], rangeMatch[2]);
+    const b = parseNumericToken(rangeMatch[3], rangeMatch[4]);
+    const unit = rangeMatch[5];
+    if (unit === 'cup' || unit === 'pesos' || b >= 5000 || Boolean(rangeMatch[4])) {
       minCup = Math.min(a, b);
       maxCup = Math.max(a, b);
       priceIntentLabel = `${minCup.toLocaleString('es-CU')}–${maxCup.toLocaleString('es-CU')} CUP`;
@@ -383,14 +577,14 @@ export function parseSmartQuery(
     working = working.replace(rangeMatch[0], ' ');
   }
 
-  // Upper bound: "menos de 20", "hasta 15", "bajo 25", "< 20", "menor a 20"
+  // Upper bound: "menos de 20", "hasta 1,500", "bajo 25", "< 20", "menor a 30mil"
   const underMatch = working.match(
-    /(?:menos de|menor a|menor de|hasta|bajo|debajo de|maximo|max|<)\s*\$?\s*(\d+(?:\.\d+)?)\s*(usd|cup|\$)?/
+    /(?:menos de|menor a|menor de|hasta|bajo|debajo de|maximo|max|<)\s*\$?\s*(\d+(?:[.,]\d+)?)\s*(mil|k)?\s*(usd|dolares|cup|pesos|\$)?/
   );
   if (underMatch) {
-    const val = parseFloat(underMatch[1]);
-    const unit = underMatch[2];
-    if (unit === 'cup' || val >= 500) {
+    const val = parseNumericToken(underMatch[1], underMatch[2]);
+    const unit = underMatch[3];
+    if (unit === 'cup' || unit === 'pesos' || val >= 5000 || Boolean(underMatch[2])) {
       maxCup = val;
       priceIntentLabel = `Hasta ${val.toLocaleString('es-CU')} CUP`;
     } else {
@@ -400,14 +594,14 @@ export function parseSmartQuery(
     working = working.replace(underMatch[0], ' ');
   }
 
-  // Lower bound: "mas de 30", "+30", "mayor de 30", "> 30"
+  // Lower bound: "mas de 30", "+30", "desde 800 usd", "> 30"
   const overMatch = working.match(
-    /(?:mas de|mayor a|mayor de|desde|minimo|min|\+|>)\s*\$?\s*(\d+(?:\.\d+)?)\s*(usd|cup|\$)?/
+    /(?:mas de|mayor a|mayor de|desde|minimo|min|\+|>)\s*\$?\s*(\d+(?:[.,]\d+)?)\s*(mil|k)?\s*(usd|dolares|cup|pesos|\$)?/
   );
   if (overMatch) {
-    const val = parseFloat(overMatch[1]);
-    const unit = overMatch[2];
-    if (unit === 'cup' || val >= 500) {
+    const val = parseNumericToken(overMatch[1], overMatch[2]);
+    const unit = overMatch[3];
+    if (unit === 'cup' || unit === 'pesos' || val >= 5000 || Boolean(overMatch[2])) {
       minCup = val;
       priceIntentLabel = `Más de ${val.toLocaleString('es-CU')} CUP`;
     } else {
@@ -417,34 +611,42 @@ export function parseSmartQuery(
     working = working.replace(overMatch[0], ' ');
   }
 
-  // Explicit size phrase: "talla 38", "talla m"
-  const sizeMatch = working.match(/\btalla\s+([a-z0-9.]+)\b/);
+  // Explicit size phrase: "talla 38", "talla m", "numero 42"
+  const sizeMatch = working.match(/\b(?:talla|numero|num)\s+([a-z0-9.]+)\b/);
   if (sizeMatch) {
     sizeHint = sizeMatch[1].toUpperCase();
     working = working.replace(sizeMatch[0], ' ');
   }
 
-  // Budget adjectives: "baratos", "economicos"
-  if (/\b(barato|baratos|barata|baratas|economico|economicos|economica|economicas)\b/.test(working)) {
-    if (maxUsd === null && maxCup === null) {
-      maxUsd = 15;
-      priceIntentLabel = 'Económicos (≤ $15 USD)';
-    }
-    working = working.replace(
-      /\b(barato|baratos|barata|baratas|economico|economicos|economica|economicas)\b/g,
-      ' '
-    );
+  // Detect budget / sorting intent words before cleaning them
+  const cheapRegex =
+    /\b(barato|baratos|barata|baratas|economico|economicos|economica|economicas|oferta|ofertas)\b/;
+  const hasCheapWord = cheapRegex.test(working);
+  if (hasCheapWord) {
+    working = working.replace(new RegExp(cheapRegex.source, 'g'), ' ');
   }
 
-  if (/\b(destacados|favoritos top|mas pedido)\b/.test(working)) {
+  const topRegex = /\b(destacados|favoritos top|mas pedido|mas pedidos|mas vendido|mas vendidos|lo mejor|mejores|populares)\b/;
+  if (topRegex.test(working)) {
     featuredOnlyHint = true;
-    working = working.replace(/\b(destacados|mas pedido)\b/g, ' ');
+    working = working.replace(new RegExp(topRegex.source, 'g'), ' ');
   }
 
   const rawTokens = normalizeText(working)
     .replace(/[<>$]+/g, ' ')
     .split(' ')
     .filter((t) => t && !STOP_WORDS.has(t));
+
+  // If user typed "barato" ALONE -> cap ≤ $15 USD; if paired with keywords ("motorina barata", "ecoflow barato"), sort cheapest first!
+  if (hasCheapWord) {
+    sortIntent = 'price_asc';
+    if (rawTokens.length === 0 && maxUsd === null && maxCup === null) {
+      maxUsd = 15;
+      priceIntentLabel = 'Económicos (≤ $15 USD)';
+    } else if (!priceIntentLabel) {
+      priceIntentLabel = 'Menor precio primero';
+    }
+  }
 
   const correctedTokens: string[] = [];
   let anyChanged = false;
@@ -454,34 +656,72 @@ export function parseSmartQuery(
     if (res.changed) anyChanged = true;
   }
 
-  // Detect department hints for stronger relevance
-  const departmentHints: Department[] = [];
+  // Detect brand
   const joinedCorrected = correctedTokens.join(' ');
-  if (/\b(tenis|zapatillas|zapatos|calzado)\b/.test(joinedCorrected)) {
+  let detectedBrand: string | null = null;
+  for (const [normBrand, prettyBrand] of lexicon.brandNormMap.entries()) {
+    if (
+      joinedCorrected === normBrand ||
+      correctedTokens.includes(normBrand) ||
+      (normBrand.includes(' ') && joinedCorrected.includes(normBrand))
+    ) {
+      detectedBrand = prettyBrand;
+      break;
+    }
+  }
+
+  // Detect department hints for stronger relevance & UI badges
+  const departmentHints: Department[] = [];
+  if (
+    /\b(tenis|zapatillas|zapatos|calzado|zueco|zuecos|sandalia|sandalias|chancleta|chancletas|chancla|chanclas|bota|botas)\b/.test(
+      joinedCorrected
+    )
+  ) {
     departmentHints.push('calzado');
   }
-  if (/\b(hombre|caballero|chico)\b/.test(joinedCorrected)) {
+  if (/\b(hombre|caballero|chico|bermuda|pulover|hoodie|sudadera|enguatada)\b/.test(joinedCorrected)) {
     departmentHints.push('hombre');
   }
-  if (/\b(mujer|dama|chica|vestido|vestidos|blusa|corse|falda|leggings)\b/.test(joinedCorrected)) {
+  if (
+    /\b(mujer|dama|chica|vestido|vestidos|blusa|corse|corset|bustier|falda|saya|leggings|shein)\b/.test(
+      joinedCorrected
+    )
+  ) {
     departmentHints.push('moda_shein');
   }
-  if (/\b(accesorios|cartera|bolso|reloj|relojes|mochila)\b/.test(joinedCorrected)) {
+  if (/\b(accesorios|cartera|bolso|reloj|relojes|audifonos|casio|olevs|mochila)\b/.test(joinedCorrected)) {
     departmentHints.push('accesorios');
   }
   if (
-    /\b(moto|motos|motorina|motorinas|bicimoto|bicicleta|triciclo|virginia|motor|motoneta)\b/.test(
+    /\b(moto|motos|motorina|motorinas|motico|pasola|bicimoto|bicimotos|bici|bicicleta|triciclo|triciclos|virginia|motor|motoneta|topmaq|yoazaky|vedca|bucatti|lifan|kivitova|250cc|150cc)\b/.test(
       joinedCorrected
     )
   ) {
     departmentHints.push('movilidad');
   }
   if (
-    /\b(solar|solares|panel|paneles|inversor|inversores|ecoflow|bluetti|anker|ampace|oupes|aferry|humsienk|ecoworthy|lifepo4|estacion|estaciones|mppt|powmr|sumry|must|delta|apex|river|bateria|baterias|kwh)\b/.test(
+    /\b(solar|solares|panel|paneles|placa|placas|inversor|inversores|ecoflow|bluetti|anker|ampace|oupes|aferry|humsienk|ecoworthy|lifepo4|estacion|estaciones|planta|plantas|apagon|apagones|respaldo|mppt|powmr|sumry|must|delta|apex|river|kwh|bifasico)\b/.test(
       joinedCorrected
     )
   ) {
     departmentHints.push('solares');
+  }
+
+  const intentBadges: string[] = [];
+  if (detectedBrand) intentBadges.push(`Marca: ${detectedBrand}`);
+  if (priceIntentLabel) intentBadges.push(priceIntentLabel);
+  if (sizeHint) intentBadges.push(`Talla ${sizeHint}`);
+  if (featuredOnlyHint) intentBadges.push('Solo TOP');
+  if (departmentHints.length === 1) {
+    const deptLabel: Record<Department, string> = {
+      calzado: 'Calzado & Tenis',
+      moda_shein: 'Moda Shein',
+      hombre: 'Moda Hombre',
+      accesorios: 'Accesorios',
+      movilidad: 'Motos & Virginia',
+      solares: 'Equipos Solares',
+    };
+    intentBadges.push(deptLabel[departmentHints[0]]);
   }
 
   const correctedQuery = correctedTokens.join(' ');
@@ -498,19 +738,69 @@ export function parseSmartQuery(
     textTokens: rawTokens,
     correctedTokens,
     departmentHints,
+    detectedBrand,
     minUsd,
     maxUsd,
     minCup,
     maxCup,
     sizeHint,
     featuredOnlyHint,
+    sortIntent,
     priceIntentLabel,
+    intentBadges,
+  };
+}
+
+function buildProductHaystack(
+  product: Product,
+  categoryName: string,
+  availableSizes: string[]
+): { hay: string; skuNorm: string; titleNorm: string; brandNorm: string; catNorm: string } {
+  const deptText =
+    product.department === 'calzado'
+      ? product.category_id === 'zuecos-sandalias'
+        ? 'calzado zueco zuecos sandalia sandalias shein boston mujer'
+        : 'calzado tenis zapatos sneakers'
+      : product.department === 'hombre'
+        ? 'moda hombre caballero ropa'
+        : product.department === 'moda_shein'
+          ? 'moda shein mujer dama ropa'
+          : product.department === 'movilidad'
+            ? 'motos motorinas bicimotos triciclos baterias motores todo virginia movilidad'
+            : product.department === 'solares'
+              ? 'equipos solares paneles inversores baterias lifepo4 estaciones energia ecoflow bluetti mppt respaldo'
+              : 'accesorios carteras relojes audifonos';
+
+  const rawJoined = `${product.sku} ${product.title} ${product.brand} ${categoryName} ${deptText} ${product.quality} ${product.fit_note || ''} ${availableSizes.join(' ')}`;
+  // Add compact forms ("72 v" -> "72v", "1024 wh" -> "1024wh", "110/220v" -> "110v 220v")
+  const compactSpecs = normalizeText(rawJoined)
+    .replace(/\b(\d+(?:\.\d+)?)\s*(v|volt|volts|w|watt|watts|wh|kw|kwh|ah|amp|cc|km)\b/g, '$1$2')
+    .replace(/110\s*\/?\s*220v?/g, '110v 220v 110 220');
+
+  return {
+    hay: `${normalizeText(rawJoined)} ${compactSpecs}`,
+    skuNorm: normalizeText(product.sku),
+    titleNorm: normalizeText(product.title),
+    brandNorm: normalizeText(product.brand),
+    catNorm: normalizeText(categoryName),
   };
 }
 
 function tokenMatchesHaystack(token: string, hay: string, dept: Department): boolean {
-  if (hay.includes(token)) return true;
-  const syns = SYNONYM_GROUPS[token];
+  const canonical = COLOR_NORMALIZATIONS[token] || token;
+  if (hay.includes(token) || (canonical !== token && hay.includes(canonical))) {
+    return true;
+  }
+
+  // Try stripping Spanish trailing plural -s/-es for words >= 4 chars
+  if (token.length >= 4 && token.endsWith('s') && hay.includes(token.slice(0, -1))) {
+    return true;
+  }
+  if (token.length >= 5 && token.endsWith('es') && hay.includes(token.slice(0, -2))) {
+    return true;
+  }
+
+  const syns = SYNONYM_GROUPS[token] || SYNONYM_GROUPS[canonical];
   if (syns) {
     if (syns.some((s) => hay.includes(s))) return true;
     if (
@@ -522,10 +812,7 @@ function tokenMatchesHaystack(token: string, hay: string, dept: Department): boo
     if ((token === 'hombre' || token === 'caballero' || token === 'chico') && dept === 'hombre') {
       return true;
     }
-    if (
-      (token === 'mujer' || token === 'dama' || token === 'chica') &&
-      dept === 'moda_shein'
-    ) {
+    if ((token === 'mujer' || token === 'dama' || token === 'chica') && dept === 'moda_shein') {
       return true;
     }
     if (token === 'accesorios' && dept === 'accesorios') {
@@ -537,7 +824,8 @@ function tokenMatchesHaystack(token: string, hay: string, dept: Department): boo
         token === 'movilidad' ||
         token === 'virginia' ||
         token === 'triciclo' ||
-        token === 'motorina') &&
+        token === 'motorina' ||
+        token === 'motico') &&
       dept === 'movilidad'
     ) {
       return true;
@@ -547,10 +835,16 @@ function tokenMatchesHaystack(token: string, hay: string, dept: Department): boo
         token === 'solares' ||
         token === 'panel' ||
         token === 'paneles' ||
+        token === 'placa' ||
+        token === 'placas' ||
         token === 'inversor' ||
         token === 'inversores' ||
         token === 'estacion' ||
         token === 'estaciones' ||
+        token === 'planta' ||
+        token === 'plantas' ||
+        token === 'apagon' ||
+        token === 'apagones' ||
         token === 'ecoflow' ||
         token === 'bluetti' ||
         token === 'lifepo4') &&
@@ -572,7 +866,6 @@ export function matchSmartProduct(
   usdToCupRate: number,
   availableSizes: string[]
 ): { matches: boolean; score: number } {
-  // Price intent checks
   if (parsed.minUsd !== null || parsed.maxUsd !== null) {
     const usd = priceInUsd(product.price, product.currency, usdToCupRate);
     if (usd === null) return { matches: false, score: 0 };
@@ -602,53 +895,90 @@ export function matchSmartProduct(
     return { matches: true, score: product.featured ? 10 : 1 };
   }
 
-  const deptText =
-    product.department === 'calzado'
-      ? 'calzado tenis zapatos'
-      : product.department === 'hombre'
-        ? 'moda hombre caballero ropa'
-        : product.department === 'moda_shein'
-          ? 'moda shein mujer dama ropa'
-          : product.department === 'movilidad'
-            ? 'motos motorinas bicimotos triciclos baterias motores todo virginia movilidad'
-            : product.department === 'solares'
-              ? 'equipos solares paneles inversores baterias lifepo4 estaciones energia ecoflow bluetti mppt'
-              : 'accesorios carteras relojes';
-
-  const hay = normalizeText(
-    `${product.sku} ${product.title} ${product.brand} ${categoryName} ${deptText} ${product.quality} ${product.fit_note} ${availableSizes.join(' ')}`
+  const { hay, skuNorm, titleNorm, brandNorm, catNorm } = buildProductHaystack(
+    product,
+    categoryName,
+    availableSizes
   );
 
   if (!tokens.every((t) => tokenMatchesHaystack(t, hay, product.department))) {
     return { matches: false, score: 0 };
   }
 
-  // Relevance score for ordering search results
   let score = 0;
-  const skuNorm = normalizeText(product.sku);
-  const titleNorm = normalizeText(product.title);
-  const brandNorm = normalizeText(product.brand);
-  const catNorm = normalizeText(categoryName);
-
-  if (skuNorm === parsed.correctedQuery) score += 100;
-  if (brandNorm === parsed.correctedQuery) score += 60;
-  if (titleNorm.includes(parsed.correctedQuery)) score += 45;
-  if (catNorm.includes(parsed.correctedQuery)) score += 30;
+  if (skuNorm === parsed.correctedQuery) score += 120;
+  if (brandNorm === parsed.correctedQuery) score += 70;
+  if (titleNorm.includes(parsed.correctedQuery)) score += 55;
+  if (catNorm.includes(parsed.correctedQuery)) score += 32;
   for (const t of tokens) {
-    if (titleNorm.includes(t)) score += 15;
-    if (brandNorm.includes(t)) score += 12;
-    if (catNorm.includes(t)) score += 8;
+    const c = COLOR_NORMALIZATIONS[t] || t;
+    if (titleNorm.includes(t) || titleNorm.includes(c)) score += 18;
+    if (brandNorm.includes(t)) score += 14;
+    if (catNorm.includes(t)) score += 9;
+    if (hay.includes(t)) score += 4;
   }
-  if (product.featured) score += 4;
+  if (parsed.departmentHints.includes(product.department)) score += 6;
+  if (product.featured) score += 5;
 
+  return { matches: true, score };
+}
+
+/**
+ * Fallback inteligente cuando una búsqueda multi-palabra exacta arroja 0 resultados:
+ * encuentra coincidencias parciales fuertes (marca/modelo/categoría) sin violar filtros numéricos de precio.
+ */
+export function matchRelaxedSmartProduct(
+  product: Product,
+  parsed: ParsedSmartQuery,
+  categoryName: string,
+  usdToCupRate: number,
+  availableSizes: string[]
+): { matches: boolean; score: number } {
+  if (parsed.correctedTokens.length < 2) return { matches: false, score: 0 };
+  if (parsed.minUsd !== null || parsed.maxUsd !== null) {
+    const usd = priceInUsd(product.price, product.currency, usdToCupRate);
+    if (usd === null) return { matches: false, score: 0 };
+    if (parsed.minUsd !== null && usd < parsed.minUsd) return { matches: false, score: 0 };
+    if (parsed.maxUsd !== null && usd > parsed.maxUsd) return { matches: false, score: 0 };
+  }
+  if (parsed.minCup !== null || parsed.maxCup !== null) {
+    const cup = priceInCup(product.price, product.currency, usdToCupRate);
+    if (cup === null) return { matches: false, score: 0 };
+    if (parsed.minCup !== null && cup < parsed.minCup) return { matches: false, score: 0 };
+    if (parsed.maxCup !== null && cup > parsed.maxCup) return { matches: false, score: 0 };
+  }
+
+  const { hay, titleNorm, brandNorm } = buildProductHaystack(
+    product,
+    categoryName,
+    availableSizes
+  );
+  let matchedCount = 0;
+  let score = 0;
+  for (const t of parsed.correctedTokens) {
+    if (tokenMatchesHaystack(t, hay, product.department)) {
+      matchedCount += 1;
+      if (brandNorm.includes(t)) score += 20;
+      if (titleNorm.includes(t)) score += 15;
+      score += 5;
+    }
+  }
+  // Require majority or strong brand/model hit (>= 2 tokens if query has 3+, or >= 1 high-value hit for 2 tokens)
+  const minNeeded = parsed.correctedTokens.length >= 3 ? 2 : 1;
+  if (matchedCount < minNeeded || score < 15) {
+    return { matches: false, score: 0 };
+  }
+  if (product.featured) score += 3;
   return { matches: true, score };
 }
 
 export interface SearchSuggestionsResult {
   didYouMean: string | null;
   priceIntentLabel: string | null;
+  intentBadges: string[];
   quickChips: string[];
   topProducts: Product[];
+  totalMatchCount: number;
 }
 
 export function buildSearchSuggestions(
@@ -665,17 +995,19 @@ export function buildSearchSuggestions(
     return {
       didYouMean: null,
       priceIntentLabel: null,
+      intentBadges: [],
       quickChips: [
+        'EcoFlow',
         'New Balance',
-        'Air Jordan',
+        'Motorinas Litio',
+        'Jordan 4',
         'Vestidos',
-        'Hasta $15',
-        'Tenis menos de $35',
-        'Hombre',
-        'Carteras',
-        'Relojes',
+        'Paneles Solares',
+        'Hasta $25',
+        'Zuecos Boston',
       ],
       topProducts: [],
+      totalMatchCount: active.length,
     };
   }
 
@@ -689,11 +1021,35 @@ export function buildSearchSuggestions(
       scored.push({ product: p, score: res.score });
     }
   }
-  scored.sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0 && parsed.correctedTokens.length >= 2) {
+    for (const p of active) {
+      const catName = lexicon.categoryMap.get(p.category_id)?.name || '';
+      const soldSet = new Set(p.sold_out_sizes || []);
+      const availSizes = p.sizes.filter((s) => s && !soldSet.has(s));
+      const res = matchRelaxedSmartProduct(p, parsed, catName, usdToCupRate, availSizes);
+      if (res.matches) {
+        scored.push({ product: p, score: res.score });
+      }
+    }
+  }
+
+  if (parsed.sortIntent === 'price_asc') {
+    scored.sort((a, b) => {
+      const pa = priceInCup(a.product.price, a.product.currency, usdToCupRate) ?? Infinity;
+      const pb = priceInCup(b.product.price, b.product.currency, usdToCupRate) ?? Infinity;
+      return pa - pb || b.score - a.score;
+    });
+  } else {
+    scored.sort((a, b) => b.score - a.score);
+  }
 
   const chipSet = new Set<string>();
   for (const b of lexicon.brands) {
-    if (normalizeText(b).includes(parsed.correctedQuery) || parsed.correctedTokens.some((t) => normalizeText(b).includes(t))) {
+    if (
+      normalizeText(b).includes(parsed.correctedQuery) ||
+      parsed.correctedTokens.some((t) => normalizeText(b).includes(t))
+    ) {
       chipSet.add(b);
     }
   }
@@ -712,7 +1068,71 @@ export function buildSearchSuggestions(
   return {
     didYouMean: parsed.didYouMean,
     priceIntentLabel: parsed.priceIntentLabel,
+    intentBadges: parsed.intentBadges,
     quickChips: Array.from(chipSet).slice(0, 6),
-    topProducts: scored.slice(0, 4).map((x) => x.product),
+    topProducts: scored.slice(0, 5).map((x) => x.product),
+    totalMatchCount: scored.length,
   };
+}
+
+export function splitHighlightParts(
+  text: string,
+  tokens: string[]
+): Array<{ text: string; hit: boolean }> {
+  const cleanTokens = tokens
+    .filter((t) => t.length >= 2)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (cleanTokens.length === 0) return [{ text, hit: false }];
+
+  const regex = new RegExp(`(${cleanTokens.join('|')})`, 'gi');
+  const normRegex = new RegExp(`^(${cleanTokens.join('|')})$`, 'i');
+  const rawParts = text.split(regex).filter(Boolean);
+  return rawParts.map((part) => ({
+    text: part,
+    hit: normRegex.test(normalizeText(part)) || normRegex.test(part),
+  }));
+}
+
+const SEARCH_HISTORY_KEY = 'yole_shop_search_history_v1';
+
+export function readSearchHistory(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(SEARCH_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).slice(0, 5)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function pushSearchHistory(query: string): string[] {
+  const clean = query.trim();
+  if (clean.length < 2) return readSearchHistory();
+  const next = [
+    clean,
+    ...readSearchHistory().filter((q) => q.toLowerCase() !== clean.toLowerCase()),
+  ].slice(0, 5);
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }
+  return next;
+}
+
+export function removeSearchHistoryItem(query: string): string[] {
+  const next = readSearchHistory().filter((q) => q.toLowerCase() !== query.trim().toLowerCase());
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }
+  return next;
 }

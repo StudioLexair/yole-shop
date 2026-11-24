@@ -404,9 +404,9 @@ INSTRUCCIONES CRÍTICAS:
 }`;
   }
 
-  return `Eres el asistente de inventario de la tienda Yole Shop (calzado 3A/G5 y moda en Cuba).
+  return `Eres el asistente de inventario de la tienda Yole Shop (calzado 3A/G5, moda, movilidad y equipos solares en Cuba).
 Analiza esta FOTO NUEVA de producto del grupo de WhatsApp:
-1. Extrae precio ("30mil" = 30000 CUP, "35mil" = 35000 CUP, "$85" = 85 USD).
+1. Extrae precio SOLO si aparece explícitamente en la foto o texto ("30mil" = 30000 CUP, "35mil" = 35000 CUP, "$85" = 85 USD). Si NO sale ningún precio, devuelve "price": null (NUNCA inventes o estimes precios).
 2. Extrae tallas AÚN DISPONIBLES (números o letras no tachados) y tallas TACHADAS con X o raya.
 3. Identifica marca, modelo descriptivo en español con color, calidad ("3A", "G5" o "Importado") y departamento ("calzado", "moda_shein", "hombre", "accesorios", "movilidad" o "solares").
 4. Devuelve ÚNICAMENTE JSON válido:

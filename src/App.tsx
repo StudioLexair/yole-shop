@@ -28,7 +28,7 @@ import { DEFAULT_SETTINGS, DEPARTMENT_LABELS } from './types';
 import {
   collectAvailableSizes,
   fetchStoreData,
-  filterProducts,
+  filterProductsWithMeta,
   pushRecentSku,
   readCachedStoreData,
   readDisplayCurrency,
@@ -61,6 +61,10 @@ import {
   buildSearchLexicon,
   buildSearchSuggestions,
   parseSmartQuery,
+  pushSearchHistory,
+  readSearchHistory,
+  removeSearchHistoryItem,
+  splitHighlightParts,
 } from './lib/smartSearch';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -137,6 +141,7 @@ export function App() {
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [favoriteSkus, setFavoriteSkus] = useState<string[]>(() => readFavoriteSkus());
   const [recentSkus, setRecentSkus] = useState<string[]>(() => readRecentSkus());
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => readSearchHistory());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readThemeMode());
   const [updateState, setUpdateState] = useState<EvaluatedUpdateState | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
@@ -173,6 +178,7 @@ export function App() {
   }, [trackerOpen]);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -291,6 +297,24 @@ export function App() {
       if (e.key === 'Escape') {
         setSearchFocused(false);
         setFilterOpen(false);
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const isTypingField =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+      if (
+        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') ||
+        (e.key === '/' && !isTypingField)
+      ) {
+        if (searchInputRef.current) {
+          e.preventDefault();
+          searchInputRef.current.focus();
+          setSearchFocused(true);
+        }
       }
     };
     document.addEventListener('mousedown', onPointerDown);
@@ -551,13 +575,41 @@ export function App() {
       .slice(0, 8);
   }, [products, recentSkus, settings.show_sold_out_public]);
 
-  const topFeaturedProducts = useMemo(
-    () =>
-      products
-        .filter((p) => p.featured && p.status === 'active')
-        .slice(0, 14),
-    [products]
-  );
+  const topFeaturedProducts = useMemo(() => {
+    const pool = products.filter((p) => p.featured && p.status === 'active');
+    if (pool.length <= 1) return pool;
+    const deptOrder: Department[] = [
+      'calzado',
+      'solares',
+      'movilidad',
+      'moda_shein',
+      'hombre',
+      'accesorios',
+    ];
+    const buckets = new Map<Department, Product[]>();
+    for (const d of deptOrder) buckets.set(d, []);
+    for (const p of pool) {
+      const b = buckets.get(p.department);
+      if (b) b.push(p);
+    }
+    const mixed: Product[] = [];
+    const targetMax = 36;
+    let round = 0;
+    while (mixed.length < targetMax) {
+      let addedInRound = false;
+      for (const d of deptOrder) {
+        const list = buckets.get(d)!;
+        if (round < list.length) {
+          mixed.push(list[round]);
+          addedInRound = true;
+          if (mixed.length >= targetMax) break;
+        }
+      }
+      if (!addedInRound) break;
+      round += 1;
+    }
+    return mixed;
+  }, [products]);
 
   const searchLexicon = useMemo(
     () => (searchFocused || search.trim() ? buildSearchLexicon(products, categories) : null),
@@ -582,16 +634,18 @@ export function App() {
         : {
             didYouMean: null,
             priceIntentLabel: null,
+            intentBadges: [],
             quickChips: [],
             topProducts: [],
+            totalMatchCount: 0,
           },
     [searchFocused, search, products, categories, settings.usd_to_cup_rate, searchLexicon]
   );
 
   const effectiveSearchDept: DepartmentFilter = search.trim() ? 'all' : activeDeptFilter;
 
-  const filteredProducts = useMemo(() => {
-    const base = filterProducts(
+  const { products: filteredProducts, usedRelaxedMatch } = useMemo(() => {
+    const meta = filterProductsWithMeta(
       products,
       {
         department: effectiveSearchDept,
@@ -608,8 +662,11 @@ export function App() {
       categories,
       searchLexicon ?? undefined
     );
-    if (!onlyFavorites) return base;
-    return base.filter((p) => favoriteSet.has(p.sku));
+    if (!onlyFavorites) return meta;
+    return {
+      products: meta.products.filter((p) => favoriteSet.has(p.sku)),
+      usedRelaxedMatch: meta.usedRelaxedMatch,
+    };
   }, [
     products,
     categories,
@@ -1105,23 +1162,34 @@ export function App() {
             <div className="search-input-wrap">
               <Search size={17} />
               <input
+                ref={searchInputRef}
                 type="search"
                 aria-label="Buscar en todo el catálogo"
-                placeholder="Buscar tenis, vestidos, marca, o ej. 'menos de $25'..."
+                placeholder="Buscar tenis, EcoFlow, motorina, vestido o ej. 'menos de $25'..."
                 value={search}
                 onFocus={() => setSearchFocused(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && search.trim()) {
+                    setSearchHistory(pushSearchHistory(search));
+                    setSearchFocused(false);
+                  }
+                }}
                 onChange={(e) => {
                   setSearch(e.target.value);
                   setSearchFocused(true);
                   setVisibleLimit(PAGE_STEP);
                 }}
               />
+              {!search && <kbd className="search-kbd" aria-hidden="true">/</kbd>}
               {search && (
                 <button
                   type="button"
                   className="search-clear"
                   aria-label="Limpiar búsqueda"
-                  onClick={() => setSearch('')}
+                  onClick={() => {
+                    setSearch('');
+                    searchInputRef.current?.focus();
+                  }}
                 >
                   <X size={14} />
                 </button>
@@ -1138,8 +1206,8 @@ export function App() {
                   <span className="search-popover__kicker">
                     <Sparkles size={13} />
                     {search.trim()
-                      ? 'Sugerencias inteligentes en toda la tienda'
-                      : 'Búsqueda inteligente · Prueba escribir marca, prenda o precio'}
+                      ? `Búsqueda inteligente · ${searchSuggestions.totalMatchCount} coincidencia${searchSuggestions.totalMatchCount === 1 ? '' : 's'}`
+                      : 'Búsqueda inteligente · Marcas, specs, jerga cubana o precios'}
                   </span>
                   <button
                     type="button"
@@ -1158,7 +1226,9 @@ export function App() {
                     className="did-you-mean-btn"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
-                      setSearch(searchSuggestions.didYouMean!);
+                      const nextQ = searchSuggestions.didYouMean!;
+                      setSearch(nextQ);
+                      setSearchHistory(pushSearchHistory(nextQ));
                       setSearchFocused(false);
                       setVisibleLimit(PAGE_STEP);
                     }}
@@ -1170,9 +1240,52 @@ export function App() {
                   </button>
                 )}
 
-                {searchSuggestions.priceIntentLabel && (
-                  <div className="search-intent-pill">
-                    Filtro detectado: <strong>{searchSuggestions.priceIntentLabel}</strong>
+                {searchSuggestions.intentBadges.length > 0 ? (
+                  <div className="search-intent-row">
+                    {searchSuggestions.intentBadges.map((badge) => (
+                      <span key={badge} className="search-intent-pill">
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  searchSuggestions.priceIntentLabel && (
+                    <div className="search-intent-pill">
+                      Filtro detectado: <strong>{searchSuggestions.priceIntentLabel}</strong>
+                    </div>
+                  )
+                )}
+
+                {!search.trim() && searchHistory.length > 0 && (
+                  <div className="search-history-block">
+                    <small className="search-section-label">Búsquedas recientes</small>
+                    <div className="search-popover__chips">
+                      {searchHistory.map((hq) => (
+                        <span key={`hist-${hq}`} className="search-history-chip">
+                          <button
+                            type="button"
+                            className="search-history-chip__btn"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSearch(hq);
+                              setSearchFocused(false);
+                              setVisibleLimit(PAGE_STEP);
+                            }}
+                          >
+                            {hq}
+                          </button>
+                          <button
+                            type="button"
+                            className="search-history-chip__del"
+                            aria-label={`Quitar ${hq} del historial`}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => setSearchHistory(removeSearchHistoryItem(hq))}
+                          >
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -1186,6 +1299,7 @@ export function App() {
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
                           setSearch(chipLabel);
+                          setSearchHistory(pushSearchHistory(chipLabel));
                           setSearchFocused(false);
                           setVisibleLimit(PAGE_STEP);
                         }}
@@ -1204,6 +1318,10 @@ export function App() {
                         displayCurrency,
                         settings.usd_to_cup_rate
                       );
+                      const titleParts = splitHighlightParts(
+                        hit.title,
+                        parsedSearch?.correctedTokens || []
+                      );
                       return (
                         <button
                           key={`hit-${hit.sku}`}
@@ -1211,6 +1329,7 @@ export function App() {
                           className="search-hit-row"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
+                            setSearchHistory(pushSearchHistory(search));
                             setSearchFocused(false);
                             openProductModal(hit);
                           }}
@@ -1224,15 +1343,40 @@ export function App() {
                             />
                           </div>
                           <div className="search-hit-info">
-                            <strong>{hit.title}</strong>
+                            <strong>
+                              {titleParts.map((part, idx) =>
+                                part.hit ? (
+                                  <mark key={idx} className="search-hl">
+                                    {part.text}
+                                  </mark>
+                                ) : (
+                                  <span key={idx}>{part.text}</span>
+                                )
+                              )}
+                            </strong>
                             <small>
                               {hit.brand} · {hit.sku}
+                              {hit.featured ? ' · ★ TOP' : ''}
                             </small>
                           </div>
                           <span className="search-hit-price">{hp.primary}</span>
                         </button>
                       );
                     })}
+                    {searchSuggestions.totalMatchCount > searchSuggestions.topProducts.length && (
+                      <button
+                        type="button"
+                        className="search-popover__viewall"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setSearchHistory(pushSearchHistory(search));
+                          setSearchFocused(false);
+                          setVisibleLimit(PAGE_STEP);
+                        }}
+                      >
+                        Ver los {searchSuggestions.totalMatchCount} resultados en catálogo →
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1253,7 +1397,7 @@ export function App() {
           </button>
         </div>
 
-        {/* Typo correction banner when popover is closed */}
+        {/* Typo correction & relaxed fallback banners */}
         {!searchFocused && parsedSearch?.didYouMean && (
           <div className="did-you-mean-inline" role="status">
             <Sparkles size={14} />
@@ -1267,6 +1411,14 @@ export function App() {
                 <strong>{parsedSearch.didYouMean}</strong>
               </button>
               ? Mostrando resultados sugeridos.
+            </span>
+          </div>
+        )}
+        {!searchFocused && usedRelaxedMatch && filteredProducts.length > 0 && (
+          <div className="did-you-mean-inline" role="status">
+            <Sparkles size={14} />
+            <span>
+              Mostrando coincidencias cercanas para <strong>“{search.trim()}”</strong>.
             </span>
           </div>
         )}
@@ -1592,28 +1744,72 @@ export function App() {
             </button>
           </div>
         ) : filteredProducts.length === 0 ? (
-          <div className="catalog-state">
+          <div className="catalog-state catalog-state--rescue">
             <p>
               {onlyFavorites
                 ? 'Aún no tienes artículos guardados en Favoritos.'
-                : 'No encontramos artículos con esos filtros.'}
+                : search.trim()
+                  ? `No encontramos resultados exactos para «${search.trim()}».`
+                  : 'No encontramos artículos con esos filtros.'}
             </p>
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={() => {
-                setDepartment('all');
-                setSheinGender('all');
-                setCategoryId('all');
-                setSizeFilter('all');
-                setPriceRange('all');
-                setSearch('');
-                setOnlyPriced(false);
-                setOnlyFavorites(false);
-              }}
-            >
-              Ver todo el catálogo
-            </button>
+            <div className="catalog-state__actions">
+              <button
+                type="button"
+                className="btn btn--outline-dark btn--sm"
+                onClick={clearAllFilters}
+              >
+                Ver todo el catálogo
+              </button>
+              {search.trim() && (
+                <a
+                  href={buildWhatsAppUrl(
+                    normalizeWhatsAppDigits(settings.whatsapp_number),
+                    `Hola ${settings.store_name}, estoy buscando «${search.trim()}» en la tienda. ¿Me ayudan a encontrarlo?`
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn--whatsapp btn--sm"
+                >
+                  <MessageCircle size={15} />
+                  <span>Preguntar por «{search.trim().slice(0, 26)}»</span>
+                </a>
+              )}
+            </div>
+            {topFeaturedProducts.length > 0 && !onlyFavorites && (
+              <div className="rescue-picks">
+                <small className="rescue-picks__label">Alternativas más pedidas en Yole Shop:</small>
+                <div className="rescue-picks__grid">
+                  {topFeaturedProducts.slice(0, 4).map((alt) => {
+                    const altPrice = getDisplayPrice(
+                      alt,
+                      displayCurrency,
+                      settings.usd_to_cup_rate
+                    );
+                    return (
+                      <button
+                        key={`rescue-${alt.sku}`}
+                        type="button"
+                        className="rescue-pick-card"
+                        onClick={() => openProductModal(alt)}
+                      >
+                        <SmartImage
+                          src={alt.image_url}
+                          alt={alt.title}
+                          variant="compact"
+                          width={46}
+                          height={46}
+                          wrapperClassName="rescue-pick-card__thumb"
+                        />
+                        <div className="rescue-pick-card__info">
+                          <strong>{alt.title}</strong>
+                          <span>{altPrice.primary}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <>
