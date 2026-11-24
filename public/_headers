@@ -28,6 +28,16 @@
 /index.html
   Cache-Control: no-cache, must-revalidate
 
+/og-default.jpg
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=86400
+
+/favicon.ico
+  Cross-Origin-Resource-Policy: cross-origin
+
+/favicon-64x64.png
+  Cross-Origin-Resource-Policy: cross-origin
+
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate
 

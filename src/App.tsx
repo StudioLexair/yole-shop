@@ -430,9 +430,7 @@ export function App() {
       product_title: product.title,
     });
     if (typeof window !== 'undefined' && !isAdminPath()) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('sku', product.sku);
-      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+      window.history.replaceState({}, '', `/p/${encodeURIComponent(product.sku)}`);
     }
   }, []);
 
@@ -440,7 +438,9 @@ export function App() {
     setSelectedProduct(null);
     if (typeof window !== 'undefined' && !isAdminPath()) {
       const url = new URL(window.location.href);
-      if (url.searchParams.has('sku')) {
+      if (/^\/p\/[A-Za-z0-9_-]+\/?$/i.test(url.pathname)) {
+        window.history.replaceState({}, '', url.search ? `/${url.search}` : '/');
+      } else if (url.searchParams.has('sku')) {
         url.searchParams.delete('sku');
         const nextUrl = url.searchParams.toString()
           ? `${url.pathname}?${url.searchParams.toString()}`
@@ -640,7 +640,9 @@ export function App() {
     if (deepLinkHandledRef.current || typeof window === 'undefined' || products.length === 0) {
       return;
     }
-    const skuParam = new URLSearchParams(window.location.search).get('sku');
+    const pathMatch = /^\/p\/([A-Za-z0-9_-]+)\/?$/i.exec(window.location.pathname);
+    const skuParam =
+      pathMatch?.[1] || new URLSearchParams(window.location.search).get('sku');
     if (!skuParam) {
       deepLinkHandledRef.current = true;
       return;

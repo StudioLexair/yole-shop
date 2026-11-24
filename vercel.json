@@ -51,6 +51,24 @@
       ]
     },
     {
+      "source": "/og-default.jpg",
+      "headers": [
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "cross-origin"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "cross-origin"
+        }
+      ]
+    },
+    {
       "source": "/sw.js",
       "headers": [
         {
@@ -71,7 +89,7 @@
   ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

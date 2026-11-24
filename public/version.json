@@ -1,13 +1,13 @@
 {
-  "version": "1.3.0",
+  "version": "1.3.1",
   "buildId": "local",
-  "releasedAt": "2026-11-24T16:15:00Z",
+  "releasedAt": "2026-11-24T16:45:00Z",
   "mandatory": false,
   "title": "¡Actualización disponible!",
-  "description": "Nuevas funciones en Yole Shop: Seguimiento de pedido con QR, encargo de tallas, cupones VIP, galería multi-foto/video y Drop Flash.",
+  "description": "Previsualización real con foto y precio al compartir productos por WhatsApp, más todas las nuevas funciones.",
   "features": [
-    "Seguimiento de pedido con código QR",
-    "Solicitudes de talla y Drop Recién Llegados",
-    "Cupones VIP y galería multi-foto/video"
+    "Preview real con foto y precio al compartir enlaces",
+    "Seguimiento de pedido con código QR y Cupones VIP",
+    "Solicitudes de talla y Drop Recién Llegados"
   ]
 }

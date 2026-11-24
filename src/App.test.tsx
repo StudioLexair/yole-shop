@@ -351,4 +351,11 @@ describe('Yole Shop App', () => {
     );
     expect(within(prodDialog).getByRole('button', { name: /Enviar solicitud de talla/i })).toBeInTheDocument();
   });
+
+  it('abre automáticamente el modal del producto al entrar por enlace compartido /p/YOL-003', async () => {
+    window.history.replaceState(null, '', '/p/YOL-003');
+    render(<App />);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('New Balance 9060 Blanco & Rosa')).toBeInTheDocument();
+  });
 });

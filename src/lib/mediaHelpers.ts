@@ -29,9 +29,9 @@ export async function downloadRemoteImage(url: string, filename: string): Promis
 
 export function buildProductShareUrl(sku: string): string {
   if (typeof window === 'undefined') {
-    return `https://yoleshop.ddns.net/?sku=${encodeURIComponent(sku)}`;
+    return `https://yoleshop.ddns.net/p/${encodeURIComponent(sku)}`;
   }
-  return `${window.location.origin}/?sku=${encodeURIComponent(sku)}`;
+  return `${window.location.origin}/p/${encodeURIComponent(sku)}`;
 }
 
 export async function shareProductLink(

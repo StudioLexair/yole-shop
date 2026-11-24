@@ -1,6 +1,6 @@
-const CACHE_SHELL = 'yole-shell-v14';
-const CACHE_MEDIA = 'yole-media-v14';
-const CACHE_API = 'yole-api-v14';
+const CACHE_SHELL = 'yole-shell-v15';
+const CACHE_MEDIA = 'yole-media-v15';
+const CACHE_API = 'yole-api-v15';
 
 const SHELL_URLS = [
   '/',
@@ -136,9 +136,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Never intercept Supabase auth/functions, Studio Lexair Ads, or live version manifest
+  // Never intercept Supabase auth/functions, Studio Lexair Ads, OG image endpoints, or live version manifest
   if (
     url.pathname === '/version.json' ||
+    url.pathname === '/og-image' ||
+    url.pathname.startsWith('/api/') ||
     url.pathname.includes('/auth/v1/') ||
     url.pathname.includes('/functions/v1/') ||
     url.hostname === 'studiolexair.ddns.net'
