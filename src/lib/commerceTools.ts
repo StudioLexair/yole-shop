@@ -874,3 +874,147 @@ export async function renderStatusStoryDataUrl(params: {
 
   return canvas.toDataURL('image/png');
 }
+
+export async function renderStorePromoStoryDataUrl(params: {
+  products: Product[];
+  settings: StoreSettings;
+}): Promise<string> {
+  const W = 1080;
+  const H = 1920;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  // Studio dark radial backdrop
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#09090b');
+  grad.addColorStop(0.5, '#18110e');
+  grad.addColorStop(1, '#050507');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle glow behind logo
+  const glow = ctx.createRadialGradient(540, 260, 20, 540, 260, 320);
+  glow.addColorStop(0, 'rgba(249,115,22,0.34)');
+  glow.addColorStop(1, 'rgba(249,115,22,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(140, 20, 800, 520);
+
+  // Brand mark
+  const logoImg = await loadImageForCanvas('/brand-mark.webp');
+  ctx.fillStyle = '#000000';
+  ctx.beginPath();
+  ctx.roundRect(425, 110, 230, 230, 52);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  if (logoImg) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(435, 120, 210, 210, 44);
+    ctx.clip();
+    ctx.drawImage(logoImg, 435, 120, 210, 210);
+    ctx.restore();
+  }
+
+  // Title + Badge
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fdba74';
+  ctx.font = '800 24px system-ui, sans-serif';
+  ctx.fillText('SANTA CLARA · ENVÍOS EN CUBA', 540, 392);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 78px system-ui, sans-serif';
+  ctx.fillText('YOLE SHOP', 540, 476);
+
+  const activeCount = params.products.filter((p) => p.status === 'active').length;
+  ctx.fillStyle = '#d4d4d8';
+  ctx.font = '600 32px system-ui, sans-serif';
+  ctx.fillText(
+    `+${activeCount || 430} productos reales · Precios en CUP y USD`,
+    540,
+    532
+  );
+  ctx.textAlign = 'left';
+
+  // 5 Department showcase cards
+  const picks: Array<{ label: string; sub: string; prod?: Product }> = [
+    {
+      label: 'Tenis & Calzado 3A / G5',
+      sub: 'Tallas reales actualizadas al día',
+      prod: params.products.find((p) => p.status === 'active' && p.department === 'calzado'),
+    },
+    {
+      label: 'Moda Shein Mujer & Hombre',
+      sub: 'Conjuntos, vestidos, camisas y más',
+      prod: params.products.find((p) => p.status === 'active' && p.department === 'moda_shein'),
+    },
+    {
+      label: 'Accesorios, Bolsos & Relojes',
+      sub: 'Piezas seleccionadas en stock',
+      prod: params.products.find((p) => p.status === 'active' && p.department === 'accesorios'),
+    },
+    {
+      label: 'Motos Eléctricas & Todo Virginia',
+      sub: 'Motos, triciclos, baterías y repuestos',
+      prod: params.products.find((p) => p.status === 'active' && p.department === 'movilidad'),
+    },
+    {
+      label: 'Equipos Solares & Respaldo',
+      sub: 'EcoFlow, Bluetti, inversores y paneles',
+      prod: params.products.find((p) => p.status === 'active' && p.department === 'solares'),
+    },
+  ];
+
+  let y = 594;
+  for (const row of picks) {
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.beginPath();
+    ctx.roundRect(72, y, W - 144, 184, 30);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    if (row.prod?.image_url) {
+      const thumb = await loadImageForCanvas(row.prod.image_url);
+      if (thumb) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(92, y + 20, 144, 144, 22);
+        ctx.clip();
+        ctx.drawImage(thumb, 92, y + 20, 144, 144);
+        ctx.restore();
+      }
+    }
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 34px system-ui, sans-serif';
+    ctx.fillText(row.label, 264, y + 84);
+    ctx.fillStyle = '#a1a1aa';
+    ctx.font = '600 25px system-ui, sans-serif';
+    ctx.fillText(row.sub, 264, y + 128);
+
+    y += 206;
+  }
+
+  // Bottom official website + WhatsApp card
+  ctx.fillStyle = '#16a34a';
+  ctx.beginPath();
+  ctx.roundRect(72, H - 254, W - 144, 174, 34);
+  ctx.fill();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 42px system-ui, sans-serif';
+  ctx.fillText('🌐 Entra ahora: yoleshop.ddns.net', 540, H - 178);
+  ctx.font = '700 30px system-ui, sans-serif';
+  ctx.fillStyle = '#dcfce7';
+  ctx.fillText(`📲 Pedidos directos WhatsApp: +${params.settings.whatsapp_number}`, 540, H - 122);
+  ctx.textAlign = 'left';
+
+  return canvas.toDataURL('image/png');
+}

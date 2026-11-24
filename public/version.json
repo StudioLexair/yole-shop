@@ -1,13 +1,13 @@
 {
-  "version": "1.7.1",
+  "version": "1.7.2",
   "buildId": "local",
-  "releasedAt": "2026-11-16T23:55:00Z",
+  "releasedAt": "2026-11-24T20:40:00Z",
   "mandatory": false,
-  "title": "Estabilidad PWA, Tema Oscuro & Panel Base de Datos · Yole Shop",
-  "description": "Blindaje contra pantallas negras por caché antiguo, colorimetría corregida en Tema Oscuro, Portal Gestores PRO mejorado con prefijo +53, bloqueo de espejo pages.dev y panel en vivo de Base de Datos & Almacenamiento en /admin.",
+  "title": "Nueva Pantalla de Carga, Vista Previa Oficial & Portada 9:16 · Yole Shop",
+  "description": "Actualizada la imagen oficial y textos para redes/WhatsApp reflejando todo el catálogo (+430 productos: Tenis 3A/G5, Moda Shein, Accesorios, Motos Eléctricas y Equipos Solares), nueva pantalla de carga limpia con el logo sin líneas girando y generador de Portada Oficial 9:16 para Estados de WhatsApp.",
   "features": [
-    "Cero pantallas negras tras actualizaciones: SW v28 + carga segura de módulos y ErrorBoundary",
-    "Tema Oscuro calibrado en /gestor, botones activos, badges y protección anti-autofill",
-    "Nuevo panel Base de Datos & Almacenamiento en /admin con métricas reales de PostgreSQL y Storage"
+    "Nueva pantalla de carga limpia con el logo protagonizando sin líneas giratorias",
+    "Vista previa de enlaces (og-default.jpg y metadatos) actualizada a los 5 departamentos reales",
+    "Nuevo botón Portada Tienda Completa 9:16 en Estados para publicar fácilmente en WhatsApp"
   ]
 }

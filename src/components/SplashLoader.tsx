@@ -7,9 +7,9 @@ interface SplashLoaderProps {
 }
 
 const PHASES = [
-  'Encendiendo catálogo oficial...',
-  'Verificando tallas reales y precios CUP / USD...',
-  'Colección verificada · Bienvenido a Yole Shop',
+  'Conectando con Yole Shop...',
+  'Cargando Tenis, Moda, Motos y Equipos Solares...',
+  'Catálogo completo listo · Bienvenido',
 ];
 
 export function SplashLoader({
@@ -27,14 +27,13 @@ export function SplashLoader({
       return;
     }
 
-    const durationMs = 4250;
+    const durationMs = 3600;
     const start = performance.now();
     let raf = 0;
 
     const tick = (now: number) => {
       const elapsed = now - start;
       const ratio = Math.min(1, elapsed / durationMs);
-      // Smooth easeOutCubic curve up to 99% until visible becomes false, then 100%
       const eased = 1 - Math.pow(1 - ratio, 2.2);
       const nextPct = Math.min(100, Math.round(eased * 100));
       setPercent(nextPct);
@@ -66,31 +65,25 @@ export function SplashLoader({
       <div className="yole-splash__card">
         <span className="yole-splash__edition">
           <span className="yole-splash__edition-dot" aria-hidden="true" />
-          <span>Santa Clara · Edición Oficial</span>
+          <span>Santa Clara · Toda Cuba</span>
         </span>
 
-        <div className="yole-splash__emblem">
-          <svg className="yole-splash__ring" viewBox="0 0 132 132" aria-hidden="true">
-            <circle className="yole-splash__ring-track" cx="66" cy="66" r="60" />
-            <circle className="yole-splash__ring-arc" cx="66" cy="66" r="60" />
-          </svg>
-          <svg className="yole-splash__ring-inner" viewBox="0 0 132 132" aria-hidden="true">
-            <circle className="yole-splash__ring-ember" cx="66" cy="66" r="51" />
-          </svg>
-          <span className="yole-splash__monogram yole-splash__monogram--img">
-            <img src="/brand-mark.webp" alt="Yole Shop" width={88} height={88} />
+        <div className="yole-splash__emblem yole-splash__emblem--clean">
+          <div className="yole-splash__logo-halo" aria-hidden="true" />
+          <span className="yole-splash__monogram yole-splash__monogram--hero">
+            <img src="/brand-mark.webp" alt="Yole Shop" width={104} height={104} />
           </span>
         </div>
 
         <div className="yole-splash__brand">
           <strong>YOLE SHOP</strong>
-          <span>Calzado Urbano · Moda Shein · Accesorios</span>
+          <span>Tenis · Moda Shein · Motos · Equipos Solares</span>
         </div>
 
         <div className="yole-splash__pillars" aria-hidden="true">
-          <span>{productCount > 0 ? `+${productCount} Artículos` : 'Calidad 3A & G5'}</span>
+          <span>{productCount > 0 ? `+${productCount} Artículos` : '+430 Artículos'}</span>
           <span>CUP / USD</span>
-          <span>WhatsApp Directo</span>
+          <span>5 Departamentos</span>
         </div>
 
         <div className="yole-splash__meter">

@@ -384,7 +384,8 @@ describe('Yole Shop App', () => {
     expect(screen.getByRole('status', { name: 'Cargando Yole Shop' })).toBeInTheDocument();
     expect(screen.getByText('YOLE SHOP')).toBeInTheDocument();
     expect(screen.getByText(/\+266 Artículos/i)).toBeInTheDocument();
-    expect(screen.getByText(/Santa Clara · Edición Oficial/i)).toBeInTheDocument();
+    expect(screen.getByText(/Santa Clara · Toda Cuba/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tenis · Moda Shein · Motos · Equipos Solares/i)).toBeInTheDocument();
   });
 
   it('muestra Drop Flash Recién Llegados, Seguimiento QR de pedidos y solicitud de talla agotada', async () => {

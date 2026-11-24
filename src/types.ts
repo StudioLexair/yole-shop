@@ -276,16 +276,16 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   shein_odd_20_plus_markup: 3,
   no_returns_notice:
     'Por favor compruebe su mercancía al momento de recibirla. No se aceptan devoluciones después de la venta.',
-  hero_badge: 'Nueva Colección · Envío directo por WhatsApp',
-  hero_title: 'Tu estilo urbano y moda Shein, en un solo lugar.',
+  hero_badge: 'Catálogo Oficial · Envío directo por WhatsApp',
+  hero_title: 'Tenis, Moda Shein, Motos y Equipos Solares en un solo lugar.',
   hero_subtitle:
-    'Tenis 3A y G5 con tallas reales al día, vestidos y conjuntos Shein, relojes y accesorios con atención directa por WhatsApp.',
+    'Más de 430 productos reales al día: Calzado 3A/G5, Moda Shein, Accesorios, Motos Eléctricas y Equipos Solares con precios CUP y USD directo por WhatsApp.',
   show_sold_out_public: false,
   flash_enabled: true,
   flash_badge: 'NUEVO DROP',
   flash_title: 'Recién Llegados · Drop de la Semana',
   flash_subtitle:
-    'Modelos recién agregados en calzado 3A/G5, Shein y accesorios con stock real',
+    'Lo más nuevo en calzado 3A/G5, Shein, movilidad eléctrica y energía solar con stock real',
   flash_ends_at: null,
 };
 

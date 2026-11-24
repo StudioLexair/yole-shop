@@ -56,6 +56,7 @@ import {
 import {
   PAYMENT_CHANNEL_ORDER,
   renderStatusStoryDataUrl,
+  renderStorePromoStoryDataUrl,
   triggerBrowserDropNotification,
   type StoryThemeKey,
 } from '../lib/commerceTools';
@@ -766,6 +767,19 @@ export function AdminMarketingTab({
     }
   };
 
+  const handleGenerateStoreCoverStory = async () => {
+    setRendering(true);
+    try {
+      const url = await renderStorePromoStoryDataUrl({ products, settings });
+      setStoryUrl(url);
+      onToast('Portada 1080×1920 de la tienda lista para tu Estado de WhatsApp');
+    } catch {
+      onToast('No se pudo generar la portada de tienda');
+    } finally {
+      setRendering(false);
+    }
+  };
+
   const handleSaveRates = async () => {
     setSavingRates(true);
     try {
@@ -845,6 +859,27 @@ export function AdminMarketingTab({
                 onClick={() => void handleGenerateStory()}
               >
                 <Sparkles size={15} /> {rendering ? 'Generando...' : 'Generar Estado 9:16'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+              <button
+                type="button"
+                className="btn-outline"
+                disabled={rendering}
+                onClick={() => void handleGenerateStoreCoverStory()}
+              >
+                <ImageIcon size={14} /> Portada Tienda Completa (9:16 WhatsApp)
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => {
+                  const caption = `🛍️ Catálogo completo Yole Shop (+${products.filter((x) => x.status === 'active').length} productos: Tenis 3A/G5, Moda Shein, Accesorios, Motos Eléctricas y Equipos Solares) 👇\nhttps://yoleshop.ddns.net`;
+                  void navigator.clipboard?.writeText(caption);
+                  onToast('Texto + link oficial copiado para pegar debajo de la imagen en tu Estado');
+                }}
+              >
+                <Copy size={14} /> Copiar pie de foto + link
               </button>
             </div>
           </div>

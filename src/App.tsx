@@ -1107,7 +1107,9 @@ export function App() {
             <div>
               <strong>{effectiveSettings.store_name.toUpperCase()}</strong>
               <small>
-                {publicGestor ? 'Catálogo verificado · Pedidos directos' : 'Calzado, Moda & Motos'}
+                {publicGestor
+                  ? 'Catálogo verificado · Pedidos directos'
+                  : 'Tenis, Moda, Motos & Solares'}
               </small>
             </div>
           </a>
