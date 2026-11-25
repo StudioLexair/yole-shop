@@ -179,7 +179,7 @@ export const onRequest = async (context: PagesContext) => {
 
   const transformed = rewriter.transform(baseResponse);
   const newHeaders = new Headers(transformed.headers);
-  newHeaders.set('Cache-Control', 'no-cache, must-revalidate');
+  newHeaders.set('Cache-Control', 'public, max-age=0, must-revalidate');
   return new Response(transformed.body, {
     status: 200,
     headers: newHeaders,

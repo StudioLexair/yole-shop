@@ -33,12 +33,17 @@
 /
   ! Cross-Origin-Resource-Policy
   Cross-Origin-Resource-Policy: cross-origin
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: public, max-age=0, must-revalidate
 
 /index.html
   ! Cross-Origin-Resource-Policy
   Cross-Origin-Resource-Policy: cross-origin
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: public, max-age=0, must-revalidate
+
+/robots.txt
+  ! Cross-Origin-Resource-Policy
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=3600
 
 /og-default.jpg
   ! Cross-Origin-Resource-Policy
