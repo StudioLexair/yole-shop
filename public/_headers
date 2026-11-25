@@ -31,9 +31,13 @@
   X-Robots-Tag: noindex, nofollow
 
 /
+  ! Cross-Origin-Resource-Policy
+  Cross-Origin-Resource-Policy: cross-origin
   Cache-Control: no-cache, must-revalidate
 
 /index.html
+  ! Cross-Origin-Resource-Policy
+  Cross-Origin-Resource-Policy: cross-origin
   Cache-Control: no-cache, must-revalidate
 
 /og-default.jpg

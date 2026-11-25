@@ -33,17 +33,21 @@ export const onRequest = async (context: { request: Request; env: PagesEnv }) =>
   }
 
   if (!imageUrl) {
-    return context.env.ASSETS.fetch(new URL('/og-default.jpg', reqUrl));
+    return context.env.ASSETS.fetch(new URL('/og-catalog.jpg', reqUrl));
   }
 
+  // wsrv.nl responde en ~150ms; Vercel /api/og queda como respaldo
   const candidates = [
-    `https://yole-shop.vercel.app/api/og?url=${encodeURIComponent(imageUrl)}`,
     `https://wsrv.nl/?url=${encodeURIComponent(imageUrl.replace(/^https?:\/\//, ''))}&w=800&h=800&fit=contain&cbg=ffffff&output=jpg&q=85`,
+    `https://yole-shop.vercel.app/api/og?url=${encodeURIComponent(imageUrl)}`,
   ];
 
   for (const upstream of candidates) {
     try {
-      const r = await fetch(upstream, { method: 'GET' });
+      const r = await fetch(upstream, {
+        method: 'GET',
+        cf: { cacheTtl: 86400, cacheEverything: true },
+      } as RequestInit);
       const ct = (r.headers.get('content-type') || '').toLowerCase();
       if (r.ok && ct.includes('image/jpeg')) {
         const headers = new Headers({
@@ -64,5 +68,5 @@ export const onRequest = async (context: { request: Request; env: PagesEnv }) =>
     }
   }
 
-  return context.env.ASSETS.fetch(new URL('/og-default.jpg', reqUrl));
+  return context.env.ASSETS.fetch(new URL('/og-catalog.jpg', reqUrl));
 };
